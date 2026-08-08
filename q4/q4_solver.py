@@ -9,6 +9,7 @@ import datetime
 import itertools
 import math
 import os
+import shutil
 
 Q4 = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(Q4, "output")
@@ -249,8 +250,8 @@ def main():
         w.writerow(["min_area", best_area, "total_area_lb", TOTAL_AREA,
                     "bbox_version_min", bbox_best, "valid_layouts", n_valid])
 
-    with open(os.path.join(run_dir, "q4_result.csv"), "w") as f:
-        f.write(open(os.path.join(OUT, "q4_result.csv")).read())
+    shutil.copy(os.path.join(OUT, "q4_result.csv"),
+                  os.path.join(run_dir, "q4_result.csv"))
     print("结果 ->", os.path.join(OUT, "q4_result.csv"))
 
 

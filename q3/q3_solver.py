@@ -140,20 +140,23 @@ def main():
         rpt = os.path.join(OUT, f"q3_{chip}.rpt")
         log = os.path.join(OUT, f"q3_{chip}.log")
         trace = os.path.join(OUT, f"q3_{chip}_bisect.csv")
-        subprocess.run([sys.executable, os.path.join(viz, "plot_floorplan.py"),
-                        "--rpt", rpt, "--side", str(r["side"]),
-                        "--out", os.path.join(chip_dir, "floorplan.png")],
-                       check=True)
-        subprocess.run([sys.executable, os.path.join(viz, "plot_convergence.py"),
-                        "--log", log, "--out", os.path.join(chip_dir, "convergence.png")],
-                       check=True)
-        subprocess.run([sys.executable, os.path.join(viz, "plot_snapshots.py"),
-                        "--log", log, "--outdir", os.path.join(chip_dir, "snapshots")],
-                       check=True)
-        subprocess.run([sys.executable, os.path.join(viz, "plot_bisect.py"),
-                        "--trace", trace, "--dstar", str(r["d_star"]),
-                        "--out", os.path.join(chip_dir, "bisect.png")],
-                       check=True)
+        if os.path.exists(rpt):
+            subprocess.run([sys.executable, os.path.join(viz, "plot_floorplan.py"),
+                            "--rpt", rpt, "--side", str(r["side"]),
+                            "--out", os.path.join(chip_dir, "floorplan.png")],
+                           check=True)
+        if os.path.exists(log):
+            subprocess.run([sys.executable, os.path.join(viz, "plot_convergence.py"),
+                            "--log", log, "--out", os.path.join(chip_dir, "convergence.png")],
+                           check=True)
+            subprocess.run([sys.executable, os.path.join(viz, "plot_snapshots.py"),
+                            "--log", log, "--outdir", os.path.join(chip_dir, "snapshots")],
+                           check=True)
+        if os.path.exists(trace):
+            subprocess.run([sys.executable, os.path.join(viz, "plot_bisect.py"),
+                            "--trace", trace, "--dstar", str(r["d_star"]),
+                            "--out", os.path.join(chip_dir, "bisect.png")],
+                           check=True)
     print("figures ->", run_dir)
 
 

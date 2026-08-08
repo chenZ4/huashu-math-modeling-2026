@@ -107,6 +107,8 @@ def main():
             dims, total = parse_blocks(os.path.join(DATA, f"{chip}.blocks"))
             side = math.ceil(math.sqrt(total * (1.0 + DEAD)))
             rpt = os.path.join(OUT, f"q2_{chip}.rpt")
+            if not os.path.exists(rpt):
+                continue
             lines = open(rpt).read().splitlines()
             hpwl = float(lines[1])
             time_s = float(lines[4])
@@ -114,7 +116,7 @@ def main():
             results.append({
                 "chip": chip, "side": side, "hpwl": round(hpwl, 2),
                 "utilization": round(total / (side * side), 4),
-                "repeats_used": None, "seed_base": BASE_SEED,
+                "repeats_used": 0, "seed_base": BASE_SEED,
                 "time_s": round(time_s, 2), "legal": ok, "note": msg,
             })
     else:

@@ -786,10 +786,14 @@ static void test_o5_end_to_end_n100() {
                     0.5f, 0.15f);
   ifstream in("/tmp/o5_e2e.rpt");
   string text((istreambuf_iterator<char>(in)), istreambuf_iterator<char>());
-  long long area, hpwl;
-  int W, H;
+  long long area = 0, hpwl = 0;
+  int W = 0, H = 0;
   vector<tuple<string, int, int, int, int>> blocks;
-  CHECK(parse_rpt(text, area, W, H, hpwl, blocks), "O5 e2e rpt parses");
+  if (!parse_rpt(text, area, W, H, hpwl, blocks)) {
+    ++g_fail;
+    cerr << "  [FAIL] O5 e2e rpt parses\n";
+    return;
+  }
   CHECK_EQ(blocks.size(), (size_t)100, "O5 e2e 100 blocks in rpt");
   map<string, pair<int, int>> dims;
   long long total = 0;
@@ -1096,6 +1100,7 @@ static void test_d3_exhaustive_shapes() {
         iota(perm.begin(), perm.end(), 1);
         shuffle(perm.begin(), perm.end(), mt19937((unsigned)rand()));
         vector<short> P(N + 1, 0), L(N + 1, 0), R(N + 1, 0);
+        P[0] = perm[0];
         for (int sid = 0; sid < N; ++sid) {
           int bid = perm[sid];
           if (s.P[sid] != -1) P[bid] = perm[s.P[sid]];
@@ -1123,6 +1128,12 @@ static void test_d3_exhaustive_shapes() {
         vector<tuple<int, int, int, int>> ref;
         string err;
         ref_decode(t, cur, N, ref, err);
+        if (!err.empty()) {
+          ++g_fail;
+          cerr << "  [FAIL] D3 exhaustive N=" << N << " shape#" << checked
+               << " rep=" << rep << " ref err: " << err << "\n";
+          return;
+        }
         for (int i = 1; i <= N; ++i) {
           const FP::BLOCK& b = fp.blk(i);
           if (b._x != get<0>(ref[i - 1]) || b._y != get<1>(ref[i - 1]) ||

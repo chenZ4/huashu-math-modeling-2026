@@ -64,6 +64,8 @@ def verify(rpt, dims):
             if a[1] < b[3] and b[1] < a[3] and a[2] < b[4] and b[2] < a[4]:
                 return False, f"overlap {a[0]} vs {b[0]}"
     for b in blocks:
+        if b[0] not in dims:
+            return False, f"unknown block {b[0]} in rpt"
         dw, dh = dims[b[0]]
         w, h = b[3] - b[1], b[4] - b[2]
         if min(w, h) != min(dw, dh) or max(w, h) != max(dw, dh):
@@ -80,7 +82,7 @@ def run_one(chip, alpha, dead, repeats=8):
     best_rpt = os.path.join(OUT, f"q1_{chip}_best.rpt")
     best_log = os.path.join(OUT, f"q1_{chip}_best.log")
     best = None
-    for r in range(repeats):
+    for r in range(max(1, repeats)):
         seed = BASE_SEED + CHIP_IDX[chip] * 1000 + r
         subprocess.run([BIN, "q1", str(alpha), blocks_path, nets_path, pl_path,
                         rpt, str(dead), "--log", log, "--seed", str(seed)],
@@ -122,6 +124,8 @@ def main():
         for chip in CHIPS:
             dims, total = parse_blocks(os.path.join(DATA, f"{chip}.blocks"))
             rpt = os.path.join(OUT, f"q1_{chip}.rpt")
+            if not os.path.exists(rpt):
+                continue
             lines = open(rpt).read().splitlines()
             W, H = map(int, lines[3].split())
             area = int(lines[2])
