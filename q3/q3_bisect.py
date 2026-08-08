@@ -1,15 +1,16 @@
-"""Q3 二分搜索：求解最小可行死区比例 d*。
-独立于 q1/q2 的代码；判定调用共享 C++ 核心的 --feas-only 模式。"""
+"""Q3 二分搜索：求解最小可行死区比例 d*（并行多种子判定版）。
+独立于 q1/q2 的代码；判定调用共享 C++ 核心的 --feas-only 模式。
+正确性关键：判定并行多种子（任一可行即可行），收敛后自适应下移确认
+d* 是"验证过的最小可行点"（d*-eps 处多种子全不可行才通过）。"""
 import csv
 import math
 import os
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys_path = None
-if ROOT not in os.sys.path:
-    os.sys.path.insert(0, os.path.join(ROOT, "common"))
+os.sys.path.insert(0, os.path.join(ROOT, "common"))
 from verify import parse_blocks  # noqa: E402
 
 BIN = os.path.join(ROOT, "cpp_solver", "bin", "main")
@@ -19,56 +20,65 @@ D_LO = 0.0
 D_HI = 0.15
 EPS = 1e-4
 PRECISE_THRESHOLD = 0.01
-JUDGE_ATTEMPTS = 3
+BASE_SEED = 20260808
+CHIP_IDX = {"n100": 0, "n200": 1, "n300": 2}
+COARSE_SEEDS = 2
+PRECISE_SEEDS = 3
+VERIFY_SEEDS = 3
 
 
 def side_for(dead, total):
     return math.ceil(math.sqrt(total * (1.0 + dead)))
 
 
-def feas_check(chip, dead, total, work_dir, rpt_path):
-    """一次可行性判定。返回 (feasible, side, bbox, hpwl)。"""
+def _one_check(chip, dead, total, seed, work_dir):
+    rpt = os.path.join(work_dir, f"feas_{seed}.rpt")
     cmd = [BIN, "q2", "0.5",
            os.path.join(DATA, f"{chip}.blocks"),
            os.path.join(DATA, f"{chip}.nets"),
            os.path.join(DATA, f"{chip}.pl"),
-           rpt_path, str(dead), "--feas-only"]
+           rpt, str(dead), "--feas-only", "--seed", str(seed)]
     subprocess.run(cmd, check=True)
-    lines = open(rpt_path).read().splitlines()
+    lines = open(rpt).read().splitlines()
     feasible = int(lines[0]) == 1
     W, H = map(int, lines[1].split())
     hpwl = float(lines[2])
     side = side_for(dead, total)
     assert side * side >= total, f"theoretical lower bound violated: side={side}"
-    return feasible, side, (W, H), hpwl
+    return feasible, (W, H), hpwl
+
+
+def feas_check_parallel(chip, dead, total, work_dir, n_seeds, tag):
+    """并行 n_seeds 个独立种子判定，任一可行即可行。返回 (feasible, 明细)。"""
+    seeds = [BASE_SEED + CHIP_IDX[chip] * 10000 + tag * 100 + i
+             for i in range(n_seeds)]
+    with ThreadPoolExecutor(max_workers=n_seeds) as ex:
+        results = list(ex.map(lambda s: _one_check(chip, dead, total, s, work_dir),
+                              seeds))
+    feasible = any(r[0] for r in results)
+    return feasible, results
 
 
 def bisect(chip, total, work_dir, trace_path):
     """二分 [D_LO, D_HI]，<EPS 早停。返回 (d_star, 迭代步数)。"""
     lo, hi = D_LO, D_HI
     rows = []
-    rpt_path = os.path.join(work_dir, "feas_tmp.rpt")
     it = 0
     while hi - lo >= EPS:
         it += 1
         mid = (lo + hi) / 2.0
-        attempts = 1 if (hi - lo) >= PRECISE_THRESHOLD else JUDGE_ATTEMPTS
-        feasible = False
-        last_side, last_bbox, last_hpwl = None, None, None
+        n_seeds = COARSE_SEEDS if (hi - lo) >= PRECISE_THRESHOLD else PRECISE_SEEDS
         t0 = time.time()
-        for _ in range(attempts):
-            f, s, bb, hp = feas_check(chip, mid, total, work_dir, rpt_path)
-            last_side, last_bbox, last_hpwl = s, bb, hp
-            if f:
-                feasible = True
-                break
+        feasible, results = feas_check_parallel(chip, mid, total, work_dir,
+                                                n_seeds, it)
         dt = time.time() - t0
+        bb = results[0][1]
         if feasible:
             hi = mid
         else:
             lo = mid
-        rows.append([it, lo, hi, mid, last_side, f"{last_bbox[0]}x{last_bbox[1]}",
-                     int(feasible), attempts, round(dt, 1)])
+        rows.append([it, lo, hi, mid, side_for(mid, total),
+                     f"{bb[0]}x{bb[1]}", int(feasible), n_seeds, round(dt, 1)])
     with open(trace_path, "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["iter", "lo", "hi", "mid", "side", "bbox", "feasible",
@@ -77,10 +87,31 @@ def bisect(chip, total, work_dir, trace_path):
     return hi, it
 
 
-def verify_infeasible(chip, d_check, total, work_dir, rpt_path):
-    """在 d_check 处做 JUDGE_ATTEMPTS 次判定，必须全不可行。"""
-    results = []
-    for _ in range(JUDGE_ATTEMPTS):
-        f, _, _, _ = feas_check(chip, d_check, total, work_dir, rpt_path)
-        results.append(f)
-    return not any(results), results
+def verify_at(chip, d_check, total, work_dir, tag):
+    """在 d_check 处做 VERIFY_SEEDS 次并行判定。返回 (all_feasible, results)。"""
+    feasible, results = feas_check_parallel(chip, d_check, total, work_dir,
+                                            VERIFY_SEEDS, tag)
+    return feasible, results
+
+
+def confirm_minimum(chip, d_star, total, work_dir):
+    """双向确认：d* 本身必须可行（不可行则上移 +EPS 重验）；
+    d*-EPS 处多种子必须全不可行（有可行则下移重验）。
+    返回 (final_d, 确认记录)。"""
+    steps = []
+    for k in range(12):
+        feas_here, r_here = verify_at(chip, d_star, total, work_dir, 900 + k)
+        if not feas_here:
+            d_star = min(D_HI, d_star + EPS)
+            steps.append({"d": round(d_star, 6), "d_feas": False,
+                          "note": "up-shift"})
+            continue
+        below = max(0.0, d_star - EPS)
+        feas_below, r_below = verify_at(chip, below, total, work_dir, 950 + k)
+        steps.append({"d": round(d_star, 6), "below": round(below, 6),
+                      "d_feas": True, "below_infeas": not feas_below,
+                      "below_results": [r[0] for r in r_below]})
+        if not feas_below:
+            return d_star, steps
+        d_star = below
+    return d_star, steps

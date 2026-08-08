@@ -284,8 +284,16 @@ n300 & 561 & 574322 & 0.868 & 0.8696 & 合法 \\
 \end{tabular}
 \end{table}
 
-面积利用率 $=$ 模块总面积 $/$ side$^2$，理论上限 $=1/1.15=0.8696$（死区 15\%）——
-实测逼近理论极限，布局紧凑度最优。
+面积利用率 $\eta = \dfrac{\Sigma A}{\text{side}^2}$。由题目公式(1)
+$\text{side} = \lceil \sqrt{\Sigma A\,(1+d)}\,\rceil$ 可得 $\text{side}^2 \ge \Sigma A(1+d)$，
+故利用率存在\textbf{严格上界}：
+
+\begin{equation}
+\eta \le \frac{1}{1+d} = \frac{1}{1.15} = 0.8696
+\end{equation}
+
+（$\lceil\cdot\rceil$ 只会使 $\text{side}$ 更大，上界随之更紧。）实测三芯片
+0.867$\sim$0.868，与上界差距 $<0.3\%$——布局紧凑度逼近公式(1)决定的理论极限。
 
 \subsection{多轮统计（8 轮 HPWL 分布，评估稳定性）}
 

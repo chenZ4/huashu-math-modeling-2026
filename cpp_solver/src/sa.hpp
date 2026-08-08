@@ -134,7 +134,7 @@ public:
   }
   pair<float, typename FLOOR_PLAN<ID, LEN>::TREE>
   run2(const int k, int rnd, const float c) {
-    float _init_T2 = _init_T / 50.f;
+    float _init_T2 = _init_T / ((_mode == Mode::Q1) ? 20.f : 50.f);
     int reset_th = 2 * _Nblcks, stop_th = 9 * _Nblcks, reset_cnt = 0;
     int iter = 1, tot_feas = 0, rej_num = 0, cnt = 1;
     _fp.init();

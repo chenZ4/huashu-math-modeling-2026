@@ -13,7 +13,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "common"))
 sys.path.insert(0, os.path.join(ROOT, "q3"))
 from verify import parse_blocks, verify_layout  # noqa: E402
-from q3_bisect import bisect, verify_infeasible, side_for  # noqa: E402
+from q3_bisect import bisect, confirm_minimum, side_for  # noqa: E402
 
 BIN = os.path.join(ROOT, "cpp_solver", "bin", "main")
 DATA = os.path.join(ROOT, "data", "raw")
@@ -79,9 +79,17 @@ def run_one(chip, repeats):
     dims, total = parse_blocks(os.path.join(DATA, f"{chip}.blocks"))
     os.makedirs(WORK, exist_ok=True)
     trace = os.path.join(OUT, f"q3_{chip}_bisect.csv")
-    rpt_tmp = os.path.join(WORK, f"feas_{chip}.rpt")
 
-    d_star, iters = bisect(chip, total, WORK, trace)
+    d_bisect = None
+    iters = 0
+    if os.path.exists(trace):
+        rows = list(csv.DictReader(open(trace)))
+        if len(rows) >= 5:
+            d_bisect = float(rows[-1]["hi"])
+            iters = len(rows)
+    if d_bisect is None:
+        d_bisect, iters = bisect(chip, total, WORK, trace)
+    d_star, confirm_steps = confirm_minimum(chip, d_bisect, total, WORK)
 
     side = side_for(d_star, total)
     hpwl = full_solve(chip, d_star, repeats, side)
@@ -89,24 +97,19 @@ def run_one(chip, repeats):
         return {
             "chip": chip, "d_star": round(d_star, 6), "side": side,
             "hpwl": float("nan"), "iterations": iters,
-            "below_d_check": round(max(0.0, d_star - 0.0001), 6),
-            "below_confirmed_infeasible": None,
-            "below_results": "n/a", "time_s": 0.0, "legal": False,
+            "confirm": str(confirm_steps), "time_s": 0.0, "legal": False,
             "note": "full solve at d* found no feasible layout",
         }
     rpt = os.path.join(OUT, f"q3_{chip}.rpt")
     lines = open(rpt).read().splitlines()
     time_s = float(lines[4])
     ok, msg = verify_layout(rpt, dims, outline=(side, side))
-
-    below_ok, below_results = verify_infeasible(chip, max(0.0, d_star - 0.0001),
-                                                total, WORK, rpt_tmp)
+    confirmed = bool(confirm_steps) and confirm_steps[-1].get("below_infeas", False)
     return {
         "chip": chip, "d_star": round(d_star, 6), "side": side,
         "hpwl": round(hpwl, 2), "iterations": iters,
-        "below_d_check": round(max(0.0, d_star - 0.0001), 6),
-        "below_confirmed_infeasible": below_ok,
-        "below_results": str(below_results),
+        "d_confirmed_minimum": confirmed,
+        "confirm_steps": str(confirm_steps),
         "time_s": round(time_s, 2), "legal": ok, "note": msg,
     }
 

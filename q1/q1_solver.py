@@ -5,6 +5,7 @@ import datetime
 import math
 import os
 import re
+import shutil
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -17,7 +18,9 @@ OUT = os.path.join(Q1, "output")
 FIGS = os.path.join(Q1, "visualization", "figs")
 
 CHIPS = ["n100", "n200", "n300"]
+CHIP_IDX = {c: i for i, c in enumerate(CHIPS)}
 LAMBDA = 0.5
+BASE_SEED = 20260808
 DEAD = 0.15
 
 
@@ -68,16 +71,20 @@ def verify(rpt, dims):
     return True, "ok"
 
 
-def run_one(chip, alpha, dead, repeats=3):
+def run_one(chip, alpha, dead, repeats=8):
     blocks_path = os.path.join(DATA, f"{chip}.blocks")
     nets_path = os.path.join(DATA, f"{chip}.nets")
     pl_path = os.path.join(DATA, f"{chip}.pl")
     rpt = os.path.join(OUT, f"q1_{chip}.rpt")
     log = os.path.join(OUT, f"q1_{chip}.log")
+    best_rpt = os.path.join(OUT, f"q1_{chip}_best.rpt")
+    best_log = os.path.join(OUT, f"q1_{chip}_best.log")
     best = None
-    for _ in range(repeats):
+    for r in range(repeats):
+        seed = BASE_SEED + CHIP_IDX[chip] * 1000 + r
         subprocess.run([BIN, "q1", str(alpha), blocks_path, nets_path, pl_path,
-                        rpt, str(dead), "--log", log], check=True)
+                        rpt, str(dead), "--log", log, "--seed", str(seed)],
+                       check=True)
         lines = open(rpt).read().splitlines()
         W, H = map(int, lines[3].split())
         area = int(lines[2])
@@ -85,6 +92,10 @@ def run_one(chip, alpha, dead, repeats=3):
         aspect = max(W, H) / min(W, H)
         if best is None or (area, aspect) < (best[0], best[1]):
             best = (area, aspect, W, H, time_s)
+            shutil.copy(rpt, best_rpt)
+            shutil.copy(log, best_log)
+    shutil.copy(best_rpt, rpt)
+    shutil.copy(best_log, log)
     dims, total = parse_blocks(blocks_path)
     area, aspect, W, H, time_s = best
     util = total / (W * H)
