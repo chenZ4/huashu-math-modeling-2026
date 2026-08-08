@@ -1,0 +1,58 @@
+"""参数扫描 + 灵敏度参数空间定义。
+
+扫参组（挂机找更优参数）与灵敏度组（每问 S 系列）统一在这里配置。
+每个配置 = (question, name, params)，由 scan.py 遍历执行。
+"""
+import os
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BIN = os.path.join(ROOT, "cpp_solver_opt", "bin", "main")
+DATA = os.path.join(ROOT, "data", "raw")
+
+# ---------------- 扫参组 ----------------
+# q1: λ × repeats（n100/n200 全扫，n300 精选）
+Q1_LAMBDAS = [0.45, 0.5, 0.55]
+Q1_REPEATS = [8, 16]
+Q2_REPEATS = [12, 16, 24]
+Q2_T2_DIVS = [20, 30, 50]
+
+def scan_configs():
+    cfgs = []
+    for lam in Q1_LAMBDAS:
+        for rep in Q1_REPEATS:
+            cfgs.append({"question": "q1", "name": f"lam{lam}_r{rep}",
+                         "lambda": lam, "repeats": rep,
+                         "chips": ["n100", "n200"]})
+    for rep in Q2_REPEATS:
+        for t2 in Q2_T2_DIVS:
+            cfgs.append({"question": "q2", "name": f"r{rep}_t2{t2}",
+                         "repeats": rep, "t2_div": t2,
+                         "chips": ["n100", "n200"]})
+    # n300 精选（成本高）
+    cfgs.append({"question": "q1", "name": "lam0.5_r16_n300",
+                 "lambda": 0.5, "repeats": 16, "chips": ["n300"]})
+    cfgs.append({"question": "q2", "name": "r16_t230_n300",
+                 "repeats": 16, "t2_div": 30, "chips": ["n300"]})
+    cfgs.append({"question": "q2", "name": "r24_t250_n300",
+                 "repeats": 24, "t2_div": 50, "chips": ["n300"]})
+    return cfgs
+
+# ---------------- 灵敏度组 ----------------
+def sensitivity_configs():
+    cfgs = []
+    # Q1: S1 λ 权衡（5 点，repeats 8）；S3 轮次收敛；S4 同 seed 复现
+    for lam in [0.40, 0.45, 0.50, 0.55, 0.60]:
+        cfgs.append({"question": "q1", "group": "sens", "name": f"s1_lam{lam}",
+                     "lambda": lam, "repeats": 8, "chips": ["n100"]})
+    for rep in [4, 8, 12, 16]:
+        cfgs.append({"question": "q1", "group": "sens", "name": f"s3_r{rep}",
+                     "lambda": 0.5, "repeats": rep, "chips": ["n100"]})
+    # Q2: S3 t2-div；S4 死区比例
+    for t2 in [20, 30, 50]:
+        cfgs.append({"question": "q2", "group": "sens", "name": f"s3_t2{t2}",
+                     "repeats": 8, "t2_div": t2, "chips": ["n100", "n200"]})
+    for d in [0.10, 0.12, 0.15, 0.18]:
+        cfgs.append({"question": "q2", "group": "sens", "name": f"s4_d{d}",
+                     "repeats": 8, "t2_div": 50, "dead": d,
+                     "chips": ["n100", "n200"]})
+    return cfgs
