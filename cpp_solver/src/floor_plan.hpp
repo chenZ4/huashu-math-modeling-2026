@@ -182,10 +182,10 @@ public:
   int Nblcks() const { return _Nblcks; }
   int Ntrmns() const { return _Ntrmns; }
   int Nnets() const { return _Nnets; }
+  const BLOCK& blk(ID i) const { return _blcks[i]; }
   TREE get_tree() { return _tree; }
 #ifdef TREE_DEBUG
   const TREE& tree() const { return _tree; }
-  const BLOCK& blk(ID i) const { return _blcks[i]; }
   const NET& dbg_net(int idx) const { return _nets[idx]; }
   void dbg_reset_init() { _has_init = false; }
   void dbg_rotate() { rotate(); _has_init = false; }

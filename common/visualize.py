@@ -61,6 +61,26 @@ def read_log(path):
     return rows
 
 
+def read_snapshots(path):
+    """解析快照段: 'snap k iter W H' 头 + N 行 name x1 y1 x2 y2。
+    返回 [(k, iter, W, H, blocks)]，blocks = [(name, x, y, w, h)]。"""
+    snaps = []
+    cur = None
+    with open(path) as f:
+        for line in f:
+            parts = line.split()
+            if not parts:
+                continue
+            if parts[0] == "snap" and len(parts) == 5:
+                cur = (int(parts[1]), int(parts[2]), int(parts[3]),
+                       int(parts[4]), [])
+                snaps.append(cur)
+            elif len(parts) == 5 and cur is not None:
+                name, x1, y1, x2, y2 = parts[0], *map(int, parts[1:])
+                cur[4].append((name, x1, y1, x2 - x1, y2 - y1))
+    return snaps
+
+
 def draw_convergence(ax, rows, title):
     """绘制收敛曲线（best cost vs 温度层序号）。"""
     iters = [r[1] for r in rows]

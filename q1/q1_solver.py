@@ -1,6 +1,7 @@
 """Q1 求解器：驱动 C++ 二进制求解三组芯片，汇总指标，产出可视化。"""
 import argparse
 import csv
+import datetime
 import math
 import os
 import re
@@ -18,6 +19,14 @@ FIGS = os.path.join(Q1, "visualization", "figs")
 CHIPS = ["n100", "n200", "n300"]
 LAMBDA = 0.5
 DEAD = 0.15
+
+
+def new_run_dir():
+    """新建运行目录 figs/<YYYYMMDD_HHMMSS>/，保留全部历史。"""
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_dir = os.path.join(FIGS, ts)
+    os.makedirs(run_dir, exist_ok=True)
+    return run_dir
 
 
 def parse_blocks(blocks_path):
@@ -59,21 +68,25 @@ def verify(rpt, dims):
     return True, "ok"
 
 
-def run_one(chip, alpha, dead):
+def run_one(chip, alpha, dead, repeats=3):
     blocks_path = os.path.join(DATA, f"{chip}.blocks")
     nets_path = os.path.join(DATA, f"{chip}.nets")
     pl_path = os.path.join(DATA, f"{chip}.pl")
     rpt = os.path.join(OUT, f"q1_{chip}.rpt")
     log = os.path.join(OUT, f"q1_{chip}.log")
-    cmd = [BIN, "q1", str(alpha), blocks_path, nets_path, pl_path, rpt,
-           str(dead), "--log", log]
-    subprocess.run(cmd, check=True)
+    best = None
+    for _ in range(repeats):
+        subprocess.run([BIN, "q1", str(alpha), blocks_path, nets_path, pl_path,
+                        rpt, str(dead), "--log", log], check=True)
+        lines = open(rpt).read().splitlines()
+        W, H = map(int, lines[3].split())
+        area = int(lines[2])
+        time_s = float(lines[4])
+        aspect = max(W, H) / min(W, H)
+        if best is None or (area, aspect) < (best[0], best[1]):
+            best = (area, aspect, W, H, time_s)
     dims, total = parse_blocks(blocks_path)
-    lines = open(rpt).read().splitlines()
-    W, H = map(int, lines[3].split())
-    area = int(lines[2])
-    time_s = float(lines[4])
-    aspect = max(W, H) / min(W, H)
+    area, aspect, W, H, time_s = best
     util = total / (W * H)
     ok, msg = verify(rpt, dims)
     return {
@@ -86,10 +99,12 @@ def run_one(chip, alpha, dead):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--alpha", type=float, default=LAMBDA, help="面积权重 λ")
+    ap.add_argument("--repeats", type=int, default=3, help="每芯片求解轮数，取最优")
     ap.add_argument("--skip-solve", action="store_true", help="跳过求解，只汇总已存在结果")
     args = ap.parse_args()
     os.makedirs(OUT, exist_ok=True)
-    os.makedirs(FIGS, exist_ok=True)
+    run_dir = new_run_dir()
+    print("run dir:", run_dir)
 
     results = []
     if args.skip_solve:
@@ -109,7 +124,8 @@ def main():
             })
     else:
         with ThreadPoolExecutor(max_workers=3) as ex:
-            results = list(ex.map(lambda c: run_one(c, args.alpha, DEAD), CHIPS))
+            results = list(ex.map(lambda c: run_one(c, args.alpha, DEAD, args.repeats),
+                                  CHIPS))
 
     csv_path = os.path.join(OUT, "q1_metrics.csv")
     with open(csv_path, "w", newline="") as f:
@@ -122,14 +138,19 @@ def main():
         chip = r["chip"]
         rpt = os.path.join(OUT, f"q1_{chip}.rpt")
         log = os.path.join(OUT, f"q1_{chip}.log")
+        chip_dir = os.path.join(run_dir, chip)
+        os.makedirs(chip_dir, exist_ok=True)
         subprocess.run([sys.executable, os.path.join(Q1, "visualization", "plot_floorplan.py"),
-                        "--rpt", rpt, "--out", os.path.join(FIGS, f"q1_{chip}_floorplan.png")],
+                        "--rpt", rpt, "--out", os.path.join(chip_dir, "floorplan.png")],
                        check=True)
         if os.path.exists(log):
             subprocess.run([sys.executable, os.path.join(Q1, "visualization", "plot_convergence.py"),
-                            "--log", log, "--out", os.path.join(FIGS, f"q1_{chip}_convergence.png")],
+                            "--log", log, "--out", os.path.join(chip_dir, "convergence.png")],
                            check=True)
-    print("figures ->", FIGS)
+            subprocess.run([sys.executable, os.path.join(Q1, "visualization", "plot_snapshots.py"),
+                            "--log", log, "--outdir", os.path.join(chip_dir, "snapshots")],
+                           check=True)
+    print("figures ->", run_dir)
 
 
 if __name__ == "__main__":

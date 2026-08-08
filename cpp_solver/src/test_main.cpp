@@ -1414,6 +1414,50 @@ static void test_q1_end_to_end_and_log() {
   CHECK(lines >= 1, "Q1: log has >= 1 temperature layer");
 }
 
+static void test_q1_snapshots() {
+  srand(999);
+  const int N = 8;
+  vector<tuple<int, int, string>> specs;
+  for (int i = 1; i <= N; ++i)
+    specs.emplace_back(1 + rand() % 10, 1 + rand() % 10, "B" + to_string(i));
+  FP fp = make_fp(specs, 1000, 1000);
+  ostringstream log;
+  SA<short, int> sa(fp, N, 1000, 1000, 1.0f, 0.9f, 0.5f, 0.1f, 0.5f, Mode::Q1, &log);
+  sa.run2(2, 2 * N + 20, 90.0f);
+  istringstream ls(log.str());
+  string tok;
+  int snaps = 0, snap_blocks = 0;
+  int cur_blocks = 0;
+  bool in_snap = false;
+  int total_blocks_lines = 0;
+  string name;
+  int x1, y1, x2, y2;
+  while (ls >> tok) {
+    if (tok == "snap") {
+      int k, iter, W, H;
+      ls >> k >> iter >> W >> H;
+      ++snaps;
+      CHECK(k >= 1 && k <= 9, "Q1 snap k in 1..9");
+      CHECK(W > 0 && H > 0, "Q1 snap bbox positive");
+      in_snap = true;
+      cur_blocks = 0;
+      continue;
+    }
+    if (in_snap) {
+      if (tok == "run2") { in_snap = false; continue; }
+      ls >> x1 >> y1 >> x2 >> y2;
+      ++cur_blocks;
+      ++total_blocks_lines;
+      if (cur_blocks > N) { ++g_fail; cerr << "  [FAIL] snap block count overflow\n"; return; }
+      CHECK(x2 > x1 && y2 > y1, "Q1 snap block positive extent");
+    }
+  }
+  CHECK_EQ(snaps, 9, "Q1: exactly 9 snapshots in log");
+  CHECK_EQ(total_blocks_lines, 9 * N, "Q1: 9 snapshots x N blocks");
+  string err;
+  CHECK(fp.tree().validate_tree(err), "Q1: tree intact after snapshots: " + err);
+}
+
 int main() {
   cerr << "== M1: topology invariant ==\n";
   test_m1_valid_random_tree();
@@ -1476,6 +1520,7 @@ int main() {
   cerr << "== Q1: free-outline mode ==\n";
   test_q1_cost_oracle();
   test_q1_end_to_end_and_log();
+  test_q1_snapshots();
   cerr << "--------------------------------\n";
   cerr << "PASS: " << g_pass << "  FAIL: " << g_fail << "\n";
   return g_fail ? 1 : 0;

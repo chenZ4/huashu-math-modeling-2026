@@ -169,6 +169,10 @@ public:
       else _T = _init_T2 * avg_delta_cost / cnt / iter;
       _fp.init();
       dbg_log("run2", iter, _T, _alpha, tot_feas ? 1 : 0);
+      if (_log) {
+        _snap_iters.push_back(iter);
+        _snap_trees.push_back(_best_sol);
+      }
       if (reset_cnt > _Nblcks / 7 + 1) break;
       if (!tot_feas) {
         if (iter > reset_th) {
@@ -180,6 +184,7 @@ public:
     }
     _fp.restore(_best_sol);
     _fp.init();
+    dbg_snapshots();
     int3 costs = _fp.cost();
     _best_cost = (_mode == Mode::Q1) ? q1_cost(costs) : true_cost(costs);
     if (_mode == Mode::Q1) dbg_push(q1_cost(costs));
@@ -194,6 +199,29 @@ public:
   float dbg_q1_avg_pen() const { return _avg_pen; }
 #endif
 private:
+  void dbg_snapshots() {
+    if (!_log) return;
+    const size_t n = _snap_trees.size();
+    if (n == 0) return;
+    for (int k = 1; k <= 9; ++k) {
+      const size_t idx = (k * n) / 10;
+      _fp.restore(_snap_trees[idx]);
+      _fp.init();
+      LEN maxx = 0, maxy = 0;
+      for (ID i = 1; i <= _Nblcks; ++i) {
+        maxx = max(maxx, LEN(_fp.blk(i)._x + _fp.blk(i)._w));
+        maxy = max(maxy, LEN(_fp.blk(i)._y + _fp.blk(i)._h));
+      }
+      *_log << "snap " << k << " " << _snap_iters[idx] << " " << int(maxx)
+            << " " << int(maxy) << "\n";
+      for (ID i = 1; i <= _Nblcks; ++i) {
+        const auto& b = _fp.blk(i);
+        *_log << b._name << " " << int(b._x) << " " << int(b._y) << " "
+              << int(b._x + b._w) << " " << int(b._y + b._h) << "\n";
+      }
+    }
+    _fp.restore(_best_sol);
+  }
   void dbg_log(const char* phase, int iter, float T, float alpha, int feas_flag) {
     if (_log) {
       *_log << phase << " " << iter << " " << T << " " << _best_cost << " "
@@ -244,6 +272,8 @@ private:
   list<bool> _recs;
   Mode _mode;
   ostream* _log;
+  vector<int> _snap_iters;
+  vector<typename FLOOR_PLAN<ID, LEN>::TREE> _snap_trees;
 #ifdef TREE_DEBUG
   vector<float> _dbg_hist;
 #endif
