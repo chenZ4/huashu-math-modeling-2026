@@ -1,3 +1,6 @@
+#ifndef FLOOR_PLAN_HPP
+#define FLOOR_PLAN_HPP
+
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -23,11 +26,24 @@ typedef tuple<int, int, int> int3;
 
 int read_labeled_int(istream& fs) {
   string tok;
-  fs >> tok;
-  if (!tok.empty() && tok.back() == ':') { int n; fs >> n; return n; }
-  string tok2; fs >> tok2;
-  int n; fs >> n;
-  return n;
+  if (!(fs >> tok)) return -1;
+  if (!tok.empty() && tok.back() == ':') {
+    int n;
+    if (!(fs >> n)) return -1;
+    return n;
+  }
+  string tok2;
+  if (!(fs >> tok2)) return -1;
+  if (tok2 == ":") {
+    int n;
+    if (!(fs >> n)) return -1;
+    return n;
+  }
+  try {
+    return stoi(tok2);
+  } catch (...) {
+    return -1;
+  }
 }
 
 template<typename ID, typename LEN>
@@ -39,7 +55,7 @@ public:
   class TREE;
   FLOOR_PLAN(ifstream& fnets, ifstream& fblcks, ifstream& fpl,
              const string& out_rpt, int Nnets, int Nblcks, int Ntrmns,
-             float alpha, float dead_ratio)
+             float alpha, float dead_ratio, bool free_outline = false)
     : _alpha(alpha), _rot_prob(0.3f), _del_and_ins_prob(0.5f),
       _W(0), _H(0), _Nblcks(Nblcks), _Ntrmns(Ntrmns), _Nnets(Nnets),
       _out_rpt(out_rpt), _tree(Nblcks), _has_init(false), _t0(clock()) {
@@ -52,6 +68,10 @@ public:
     _H = _W;
     read_terminals(fpl);
     read_nets(fnets);
+    if (free_outline) {
+      for (ID i = 1; i <= Nblcks; ++i) _rotable.push_back(i);
+      return;
+    }
     int cnt = 0;
     for (ID i = 1; i <= Nblcks; ++i) {
       int min_wh = min(_W, _H);
@@ -161,14 +181,16 @@ public:
   int H() const { return _H; }
   int Nblcks() const { return _Nblcks; }
   int Ntrmns() const { return _Ntrmns; }
+  int Nnets() const { return _Nnets; }
   TREE get_tree() { return _tree; }
 #ifdef TREE_DEBUG
   const TREE& tree() const { return _tree; }
   const BLOCK& blk(ID i) const { return _blcks[i]; }
+  const NET& dbg_net(int idx) const { return _nets[idx]; }
   void dbg_reset_init() { _has_init = false; }
-  void dbg_rotate() { rotate(); }
-  void dbg_del_ins() { del_and_ins(); }
-  void dbg_swap() { swap_two_nodes(); }
+  void dbg_rotate() { rotate(); _has_init = false; }
+  void dbg_del_ins() { del_and_ins(); _has_init = false; }
+  void dbg_swap() { swap_two_nodes(); _has_init = false; }
 #endif
 private:
   void read_blocks(ifstream& fblcks, int Nblcks, int Ntrmns) {
@@ -198,6 +220,10 @@ private:
           LEN x, y; iss >> x >> y;
           minx = min(minx, x); maxx = max(maxx, x);
           miny = min(miny, y); maxy = max(maxy, y);
+        }
+        if (maxx <= minx || maxy <= miny) {
+          cerr << "degenerate block " << name << " with zero extent\n";
+          exit(1);
         }
         blocks.emplace_back(name, maxx - minx, maxy - miny);
       }
@@ -257,12 +283,14 @@ private:
     }
   }
   void rotate() {
+    if (_rotable.empty()) return;
     ID id = _rotable[(rand() % _rotable.size())];
     _blcks[id]._rot = !_blcks[id]._rot;
     swap(_blcks[id]._w, _blcks[id]._h);
     _tree.rotate(id);
   }
   void del_and_ins() {
+    if (_Nblcks < 2) return;
     ID id = (rand() % _Nblcks) + 1;
     _tree.del_from_tree(id);
     ID p = (rand() % _Nblcks) + 1;
@@ -271,11 +299,12 @@ private:
     _tree.ins_to_tree(p, id, left);
   }
   void swap_two_nodes() {
+    if (_Nblcks < 2) return;
     ID id1 = rand() % _Nblcks;
     ID id2 = (id1 + ((rand() % (_Nblcks - 1)) + 1)) % _Nblcks;
     _tree.swap_two_nodes(id1 + 1, id2 + 1);
   }
-  float randf() const { return float(rand()) / RAND_MAX; }
+  float randf() const { return float(rand()) / float(RAND_MAX); }
   bool randb() const { return rand() % 2; }
   float _alpha, _rot_prob, _del_and_ins_prob;
   int _W, _H, _Nblcks, _Ntrmns, _Nnets;
@@ -454,6 +483,7 @@ public:
   ID dbg_p(ID u) const { return _nodes[u]._p(); }
   ID dbg_l(ID u) const { return _nodes[u]._l(); }
   ID dbg_r(ID u) const { return _nodes[u]._r(); }
+  ID dbg_root() const { return _nodes[0]._p(); }
   const vector<ID>& dbg_cy() const { return _dbg_cy; }
 #endif
 private:
@@ -598,3 +628,5 @@ template<typename ID, typename LEN> struct FLOOR_PLAN<ID, LEN>::NODE {
   void s_rot() { x ^= 1; }
   int x;
 };
+
+#endif

@@ -22,16 +22,34 @@ make clean
 ## 求解器用法
 
 ```bash
-./bin/main <alpha> <blocks> <nets> <pl> <rpt> [dead_ratio]
+./bin/main <mode:q1|q2> <alpha> <blocks> <nets> <pl> <rpt> [dead_ratio] [--log <file>]
 ```
+
+- `mode=q1`：自由轮廓，代价 = λ·面积 + (1−λ)·长宽比对称惩罚（λ = alpha，默认 0.5）
+- `mode=q2`：固定正方形轮廓（dead_ratio 默认 0.15），HPWL 为主
+- `--log <file>`：每温度层记录 `phase iter T best_cost alpha feas`（收敛轨迹）
 
 示例：
 
 ```bash
-./bin/main 0.5 data/raw/n100.blocks data/raw/n100.nets data/raw/n100.pl /tmp/n100.rpt 0.15
+# Q1（自由轮廓，面积+长宽比）
+./bin/main q1 0.5 data/raw/n100.blocks data/raw/n100.nets data/raw/n100.pl /tmp/q1.rpt --log /tmp/q1.log
+
+# Q2（固定轮廓 + HPWL）
+./bin/main q2 0.5 data/raw/n100.blocks data/raw/n100.nets data/raw/n100.pl /tmp/q2.rpt 0.15
 ```
 
 输出 `.rpt` 格式：cost / hpwl / area / W H / time / 每模块 `name x y x+w y+h`。
+
+## Q1 复现
+
+```bash
+conda activate math
+python q1/q1_solver.py        # 求解三芯片 + 汇总 CSV + 出图
+python q1/q1_solver.py --skip-solve   # 只重出图/汇总
+```
+
+产物：`q1/output/q1_metrics.csv`（面积/长宽比/利用率/合法性）、`q1/visualization/figs/*.png`（布图 + 收敛曲线）。
 
 ## 目录
 
