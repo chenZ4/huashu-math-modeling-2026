@@ -56,19 +56,20 @@ public:
     }
     _init_T = -avg_cost / _N / logf(P);
   };
-  void run(const int k, int rnd, const float c) {
+  void run(const int k, int rnd, const float c, bool early_feas = false) {
     _recs.resize(_N, false);
     _N_feas = 0;
     _beta = 0.0;
     int reset_th = 2 * _Nblcks, stop_th = 4 * _Nblcks, reset_cnt = 0;
     _fp.init();
     int iter = 1, tot_feas = 0;
+    bool done = false;
     float _T = _init_T, prv_cost = norm_cost(_fp.cost(true, true));
     _best_cost = prv_cost;
     dbg_push(_best_cost);
     int rej_num = 0, cnt = 1;
     typename FLOOR_PLAN<ID, LEN>::TREE last_sol = _fp.get_tree();
-    while (_T > temp_th || float(rej_num) <= rej_ratio * cnt || !tot_feas) {
+    while (!done && (_T > temp_th || float(rej_num) <= rej_ratio * cnt || !tot_feas)) {
       if (tot_feas) _beta += 0.01;
       float avg_delta_cost = 0;
       rej_num = 0, cnt = 1;
@@ -86,8 +87,9 @@ public:
           ++_N_feas;
           _recs.push_back(true);
           ++tot_feas;
+          if (early_feas) { done = true; break; }
         } else _recs.push_back(false);
-        _alpha = _alpha_base + (1 - _alpha_base) * _N_feas / _N;
+        _alpha = _alpha_base + (1 - _alpha_base) * float(_N_feas) / float(_N);
 
         if (delta_cost <= 0 || randf() < expf(-delta_cost / _T) || tot_feas == 1) {
           prv_cost = cost;
@@ -104,12 +106,17 @@ public:
           ++rej_num;
         }
       }
+      if (done) break;
       ++iter;
       if (iter <= k) _T = _init_T * avg_delta_cost / cnt / iter / c;
       else _T = _init_T * avg_delta_cost / cnt / iter;
       _fp.init();
       dbg_log("run", iter, _T, _alpha, tot_feas ? 1 : 0);
-      if (reset_cnt > _Nblcks / 4 + 1) break;
+      if (_log) {
+        _snap_iters.push_back(iter);
+        _snap_trees.push_back(_best_sol);
+      }
+      if (reset_cnt > _Nblcks / 16 + 1) break;
       if (!tot_feas) {
         if (iter > reset_th) {
           _T = _init_T;
@@ -122,13 +129,16 @@ public:
       } else if (iter > stop_th) break;
     }
     _fp.restore(_best_sol);
+    _last_feasible = (tot_feas > 0);
+    dbg_snapshots();
   }
   pair<float, typename FLOOR_PLAN<ID, LEN>::TREE>
   run2(const int k, int rnd, const float c) {
-    float _init_T2 = _init_T / ((_mode == Mode::Q1) ? 20.f : 50.f);
+    float _init_T2 = _init_T / 50.f;
     int reset_th = 2 * _Nblcks, stop_th = 9 * _Nblcks, reset_cnt = 0;
     int iter = 1, tot_feas = 0, rej_num = 0, cnt = 1;
     _fp.init();
+    tot_feas = feas(_fp.cost()) ? 1 : 0;
     float _T = _init_T2;
     float prv_cost = (_mode == Mode::Q1) ? q1_cost(_fp.cost()) : true_cost(_fp.cost(), _avg_true);
     _best_cost = prv_cost;
@@ -198,6 +208,7 @@ public:
   float dbg_q1_avg_area() const { return _avg_area; }
   float dbg_q1_avg_pen() const { return _avg_pen; }
 #endif
+  bool last_feasible() const { return _last_feasible; }
 private:
   void dbg_snapshots() {
     if (!_log) return;
@@ -272,6 +283,7 @@ private:
   list<bool> _recs;
   Mode _mode;
   ostream* _log;
+  bool _last_feasible = false;
   vector<int> _snap_iters;
   vector<typename FLOOR_PLAN<ID, LEN>::TREE> _snap_trees;
 #ifdef TREE_DEBUG
@@ -284,7 +296,7 @@ template<typename ID, typename LEN>
 void solve(ifstream& fnets, ifstream& fblcks, ifstream& fpl,
            const string& rpt, int Nnets, int Nblcks, int Ntrmns,
            float alpha, float dead_ratio, Mode mode = Mode::Q2,
-           ostream* log = nullptr) {
+           ostream* log = nullptr, bool feas_only = false) {
   FLOOR_PLAN<ID, LEN> fp(fnets, fblcks, fpl, rpt, Nnets, Nblcks, Ntrmns,
                          alpha, dead_ratio, mode == Mode::Q1);
   float P = 0.9f, alpha_base = 0.5f, beta = 0.1f;
@@ -293,6 +305,16 @@ void solve(ifstream& fnets, ifstream& fblcks, ifstream& fpl,
   float c = max(100 - int(Nblcks), 10);
   SA<ID, LEN> sa(fp, Nblcks, fp.W(), fp.H(), R, P, alpha_base, beta, alpha,
                  mode, log);
+  if (feas_only) {
+    sa.run(k, rnd, c, true);
+    fp.init();
+    int3 costs = fp.cost();
+    ofstream outs(rpt);
+    outs << (sa.last_feasible() ? 1 : 0) << '\n';
+    outs << get<1>(costs) << " " << get<2>(costs) << '\n';
+    outs << get<0>(costs) / 2. << '\n';
+    return;
+  }
   typename FLOOR_PLAN<ID, LEN>::TREE trees[2];
   float costs[2];
   if (mode == Mode::Q1) {

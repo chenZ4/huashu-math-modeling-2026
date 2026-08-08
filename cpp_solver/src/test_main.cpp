@@ -772,6 +772,7 @@ static void test_o5_vs_bruteforce() {
 }
 
 static void test_o5_end_to_end_n100() {
+  srand(20260808);
   ifstream fblcks("../data/raw/n100.blocks");
   ifstream fnets("../data/raw/n100.nets");
   ifstream fpl("../data/raw/n100.pl");
@@ -1458,6 +1459,95 @@ static void test_q1_snapshots() {
   CHECK(fp.tree().validate_tree(err), "Q1: tree intact after snapshots: " + err);
 }
 
+static void test_q2_run_snapshots() {
+  srand(4321);
+  const int N = 10;
+  vector<tuple<int, int, string>> specs;
+  for (int i = 1; i <= N; ++i)
+    specs.emplace_back(1 + rand() % 15, 1 + rand() % 15, "B" + to_string(i));
+  FP fp = make_fp(specs, 1000, 1000);
+  ostringstream log;
+  SA<short, int> sa(fp, N, 1000, 1000, 1.0f, 0.9f, 0.5f, 0.1f, 0.5f, Mode::Q2, &log);
+  sa.run(2, 2 * N + 20, 90.0f);
+  CHECK(sa.last_feasible(), "T1: Q2 run found feasible solution");
+  istringstream ls(log.str());
+  string tok;
+  int snaps = 0, blocks_in_snap = 0;
+  bool in_snap = false;
+  int last_k = 0;
+  while (ls >> tok) {
+    if (tok == "snap") {
+      int k, iter, W, H;
+      ls >> k >> iter >> W >> H;
+      ++snaps;
+      CHECK(k >= 1 && k <= 9, "T1: run snap k in 1..9");
+      last_k = k;
+      in_snap = true;
+      continue;
+    }
+    if (in_snap) {
+      if (tok == "run2" || tok == "run") { in_snap = false; continue; }
+      int x1, y1, x2, y2;
+      ls >> x1 >> y1 >> x2 >> y2;
+      ++blocks_in_snap;
+      CHECK(x2 > x1 && y2 > y1, "T1: run snap block positive");
+    }
+  }
+  CHECK_EQ(snaps, 9, "T1: run() emits 9 snapshots");
+  CHECK_EQ(last_k, 9, "T1: last snap k == 9");
+  CHECK_EQ(blocks_in_snap, 9 * N, "T1: 9 snapshots x N blocks");
+}
+
+static void test_q2_feas_only() {
+  srand(5555);
+  const int N = 12;
+  vector<tuple<int, int, string>> specs;
+  long long total = 0;
+  for (int i = 1; i <= N; ++i) {
+    int w = 1 + rand() % 12, h = 1 + rand() % 12;
+    specs.emplace_back(w, h, "B" + to_string(i));
+    total += (long long)w * h;
+  }
+  {
+    FP fp = make_fp(specs, 1000, 1000);
+    SA<short, int> sa(fp, N, 1000, 1000, 1.0f, 0.9f, 0.5f, 0.1f, 0.5f, Mode::Q2);
+    sa.run(2, 2 * N + 20, 90.0f);
+    CHECK(sa.last_feasible(), "T2: feasible instance -> last_feasible true");
+  }
+  {
+    int tiny = (int)ceil(sqrt((double)total / 2.0));
+    FP fp = make_fp(specs, tiny, tiny);
+    SA<short, int> sa(fp, N, tiny, tiny, 1.0f, 0.9f, 0.5f, 0.1f, 0.5f, Mode::Q2);
+    sa.run(2, 2 * N + 20, 90.0f);
+    CHECK(!sa.last_feasible(), "T2: infeasible instance -> last_feasible false");
+    string err;
+    CHECK(fp.tree().validate_tree(err), "T2: tree intact after infeasible run: " + err);
+  }
+}
+
+static void test_q2_end_to_end_hpwl() {
+  ifstream fblcks("../data/raw/n100.blocks");
+  ifstream fnets("../data/raw/n100.nets");
+  ifstream fpl("../data/raw/n100.pl");
+  if (!fblcks || !fnets || !fpl) { ++g_fail; cerr << "  [FAIL] T3 missing data\n"; return; }
+  int Nnets = read_labeled_int(fnets);
+  int Nblcks = read_labeled_int(fblcks);
+  int Ntrmns = read_labeled_int(fblcks);
+  fnets.seekg(0);
+  fblcks.seekg(0);
+  FP fp(fnets, fblcks, fpl, "", Nnets, Nblcks, Ntrmns, 0.5f, 0.15f);
+  SA<short, int> sa(fp, Nblcks, fp.W(), fp.H(), fp.R(), 0.9f, 0.5f, 0.1f, 0.5f, Mode::Q2);
+  const int k = max(2, Nblcks / 11), rnd = 2 * Nblcks + 20;
+  const float c = max(100 - int(Nblcks), 10);
+  sa.run(k, rnd, c);
+  auto res = sa.run2(k, rnd, c);
+  fp.restore(res.second);
+  fp.init();
+  CHECK_EQ(oracle_hpwl(fp), (long long)get<0>(fp.cost()), "T3: Q2 SA result hpwl == oracle");
+  string err;
+  CHECK(verify_layout_definition(fp, Nblcks, err), "T3: Q2 SA result legal: " + err);
+}
+
 int main() {
   cerr << "== M1: topology invariant ==\n";
   test_m1_valid_random_tree();
@@ -1521,6 +1611,10 @@ int main() {
   test_q1_cost_oracle();
   test_q1_end_to_end_and_log();
   test_q1_snapshots();
+  cerr << "== Q2: fixed-outline mode ==\n";
+  test_q2_run_snapshots();
+  test_q2_feas_only();
+  test_q2_end_to_end_hpwl();
   cerr << "--------------------------------\n";
   cerr << "PASS: " << g_pass << "  FAIL: " << g_fail << "\n";
   return g_fail ? 1 : 0;

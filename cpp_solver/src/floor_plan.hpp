@@ -626,7 +626,7 @@ template<typename ID, typename LEN> struct FLOOR_PLAN<ID, LEN>::NODE {
   void s_r(const uint& i) { x = ((x & rmsk_r) | ((i << 11) & msk_r)); }
   void s_p(const uint& i) { x = ((x & rmsk_p) | ((i << 21) & msk_p)); }
   void s_rot() { x ^= 1; }
-  int x;
+  unsigned int x;
 };
 
 #endif
