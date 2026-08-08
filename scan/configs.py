@@ -28,6 +28,12 @@ def scan_configs():
             cfgs.append({"question": "q2", "name": f"r{rep}_t2{t2}",
                          "repeats": rep, "t2_div": t2,
                          "chips": ["n100", "n200"]})
+    # Q3：判定种子 × 二分精度（n100/n200 快；n300 精选）
+    for seeds in (3, 5):
+        for eps in (1e-3, 1e-4):
+            cfgs.append({"question": "q3", "name": f"seed{seeds}_e{eps}",
+                         "seeds": seeds, "eps": eps,
+                         "chips": ["n100", "n200"]})
     # n300 精选（成本高）
     cfgs.append({"question": "q1", "name": "lam0.5_r16_n300",
                  "lambda": 0.5, "repeats": 16, "chips": ["n300"]})
@@ -35,6 +41,8 @@ def scan_configs():
                  "repeats": 16, "t2_div": 30, "chips": ["n300"]})
     cfgs.append({"question": "q2", "name": "r24_t250_n300",
                  "repeats": 24, "t2_div": 50, "chips": ["n300"]})
+    cfgs.append({"question": "q3", "name": "seed5_e1e-4_n300",
+                 "seeds": 5, "eps": 1e-4, "chips": ["n300"]})
     return cfgs
 
 # ---------------- 灵敏度组 ----------------
@@ -55,4 +63,11 @@ def sensitivity_configs():
         cfgs.append({"question": "q2", "group": "sens", "name": f"s4_d{d}",
                      "repeats": 8, "t2_div": 50, "dead": d,
                      "chips": ["n100", "n200"]})
+    # Q3 灵敏度：判定种子 / 判定重复性 / 二分精度
+    for seeds in (1, 3, 5):
+        cfgs.append({"question": "q3", "group": "sens", "name": f"s1_seed{seeds}",
+                     "seeds": seeds, "eps": 1e-4, "chips": ["n100"]})
+    for eps in (1e-3, 1e-4, 1e-5):
+        cfgs.append({"question": "q3", "group": "sens", "name": f"s3_e{eps}",
+                     "seeds": 3, "eps": eps, "chips": ["n100"]})
     return cfgs

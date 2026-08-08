@@ -7,3 +7,5 @@ __pycache__/
 *.toc
 missfont.log
 cpp_solver/bin/
+
+*.tmp

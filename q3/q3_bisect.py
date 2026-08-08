@@ -59,15 +59,16 @@ def feas_check_parallel(chip, dead, total, work_dir, n_seeds, tag):
     return feasible, results
 
 
-def bisect(chip, total, work_dir, trace_path):
-    """二分 [D_LO, D_HI]，<EPS 早停。返回 (d_star, 迭代步数)。"""
+def bisect(chip, total, work_dir, trace_path, eps=EPS,
+            coarse_seeds=COARSE_SEEDS, precise_seeds=PRECISE_SEEDS):
+    """二分 [D_LO, D_HI]，<eps 早停。返回 (d_star, 迭代步数)。"""
     lo, hi = D_LO, D_HI
     rows = []
     it = 0
-    while hi - lo >= EPS:
+    while hi - lo >= eps:
         it += 1
         mid = (lo + hi) / 2.0
-        n_seeds = COARSE_SEEDS if (hi - lo) >= PRECISE_THRESHOLD else PRECISE_SEEDS
+        n_seeds = coarse_seeds if (hi - lo) >= PRECISE_THRESHOLD else precise_seeds
         t0 = time.time()
         feasible, results = feas_check_parallel(chip, mid, total, work_dir,
                                                 n_seeds, it)
@@ -87,27 +88,29 @@ def bisect(chip, total, work_dir, trace_path):
     return hi, it
 
 
-def verify_at(chip, d_check, total, work_dir, tag):
-    """在 d_check 处做 VERIFY_SEEDS 次并行判定。返回 (all_feasible, results)。"""
+def verify_at(chip, d_check, total, work_dir, tag, n_seeds=VERIFY_SEEDS):
+    """在 d_check 处做 n_seeds 次并行判定。返回 (all_feasible, results)。"""
     feasible, results = feas_check_parallel(chip, d_check, total, work_dir,
-                                            VERIFY_SEEDS, tag)
+                                            n_seeds, tag)
     return feasible, results
 
 
-def confirm_minimum(chip, d_star, total, work_dir):
+def confirm_minimum(chip, d_star, total, work_dir, verify_seeds=VERIFY_SEEDS):
     """双向确认：d* 本身必须可行（不可行则上移 +EPS 重验）；
     d*-EPS 处多种子必须全不可行（有可行则下移重验）。
     返回 (final_d, 确认记录)。"""
     steps = []
     for k in range(12):
-        feas_here, r_here = verify_at(chip, d_star, total, work_dir, 900 + k)
+        feas_here, r_here = verify_at(chip, d_star, total, work_dir, 900 + k,
+                                        n_seeds=verify_seeds)
         if not feas_here:
             d_star = min(D_HI, d_star + EPS)
             steps.append({"d": round(d_star, 6), "d_feas": False,
                           "note": "up-shift"})
             continue
         below = max(0.0, d_star - EPS)
-        feas_below, r_below = verify_at(chip, below, total, work_dir, 950 + k)
+        feas_below, r_below = verify_at(chip, below, total, work_dir, 950 + k,
+                                           n_seeds=verify_seeds)
         steps.append({"d": round(d_star, 6), "below": round(below, 6),
                       "d_feas": True, "below_infeas": not feas_below,
                       "below_results": [r[0] for r in r_below]})
