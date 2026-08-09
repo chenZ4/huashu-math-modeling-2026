@@ -216,6 +216,7 @@ private:
     if (!_log) return;
     const size_t n = _snap_trees.size();
     if (n == 0) return;
+
     for (int k = 1; k <= 9; ++k) {
       const size_t idx = (k * n) / 10;
       _fp.restore(_snap_trees[idx]);
@@ -234,6 +235,7 @@ private:
       }
     }
     _fp.restore(_best_sol);
+    _fp.init();  // 修复: snapshots 后显式重放置, 与无 log 路径状态逐位对齐
   }
   void dbg_log(const char* phase, int iter, float T, float alpha, int feas_flag) {
     if (_log) {
