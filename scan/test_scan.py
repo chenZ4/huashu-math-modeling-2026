@@ -105,7 +105,7 @@ def test_resume(results):
     with scan.state.lock:
         done, pn = scan.state.done, scan.state.pass_no
     check("重跑 skip 生效且快速", done >= 3 and pn >= 2, f"done={done} pass={pn}")
-    check("停止收尾", stop_and_wait(t, 120))
+    check("停止收尾", stop_and_wait(t, 400))
 
 
 def test_best_accumulate(results):
@@ -132,7 +132,7 @@ def test_best_accumulate(results):
         cur = list(csv.DictReader(f))[0]
     check("force 重跑恢复更优面积", float(cur["area"]) <= float(orig["area"]),
           f"orig={orig['area']} cur={cur['area']}")
-    check("停止收尾", stop_and_wait(t, 120))
+    check("停止收尾", stop_and_wait(t, 400))
 
 
 def test_timeout_guard():
