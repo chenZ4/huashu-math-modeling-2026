@@ -316,7 +316,7 @@ def worker_main(cfgs, workers, max_hours):
 
 
 def _worker_loop(cfgs, workers, max_hours):
-    cfgs = sorted(cfgs, key=lambda c: 0 if "n300" in c["chips"] else 1)
+    cfgs = sorted(cfgs, key=lambda c: 0 if "n300" not in c["chips"] else 1)
     while True:
         with state.lock:
             if state.stop_flag:
