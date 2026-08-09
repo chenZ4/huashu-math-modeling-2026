@@ -68,6 +68,8 @@ def s1_seeds(rows):
     for r in rows:
         if r["_file"].startswith("sens_s3_e"):   # eps 系列，seeds=3 固定
             continue
+        if "_sep_" in r["_file"]:                # 判定/确认分离配置，协议不同
+            continue
         if abs(f(r.get("eps", 1e-4)) - 1e-4) > 1e-12:
             continue
         try:
@@ -145,17 +147,19 @@ def s3_sep(rows):
               rows_out)
 
     fig, ax = plt.subplots(figsize=(8, 5))
+    styles = {7: ("o-", "#2980b9", "确认种子 7"),
+              10: ("s--", "#c0392b", "确认种子 10")}
     for chip in ["n100", "n200", "n300"]:
-        pts = sorted([(j, d) for (c, j, k), (d, _) in best.items()
-                      if c == chip], key=lambda t: t[0])
-        if pts:
-            labels = {3: "判定3", 5: "判定5"}
-            for j, d in pts:
-                ax.plot([j], [d], "o", label=(f"{chip} 判定{j}" if True else None))
-    ax.set_xlabel("判定种子数（确认种子 7/10）")
+        for k, (marker, color, label) in styles.items():
+            pts = sorted([(j, d) for (c, j, ck), (d, _) in best.items()
+                          if c == chip and ck == k])
+            if pts:
+                ax.plot([p[0] for p in pts], [p[1] for p in pts], marker,
+                        color=color, label=f"{chip}（{label}）")
+    ax.set_xlabel("判定种子数")
     ax.set_ylabel(r"$d^*$")
     ax.set_title("Q3 灵敏度：判定/确认种子解耦")
-    ax.legend()
+    ax.legend(fontsize=9)
     save_fig(fig, "q3_sep_judge_confirm.png")
     return rows_out
 
@@ -207,11 +211,11 @@ $K = 1/3/5/7/10/15$（n100/n200），n300 部分数据（5/7，补充扫描中�
              "S1 数据（eps=1e-4）", "tab:q3s1") + r"""
 
 \textbf{结论}：$d^*$ 随种子数\textbf{单调下降}——n100 从 1 种子的
-0.137183 降至 15 种子的 0.076072（改善 45\%），n200 从 0.137183 区间
-降至 0.084141。种子数 3 时 n100 判定不可靠（未确认），5 及以上稳定。
-\emph{论文表述必须注明"搜索强度相关"}：$d^*$ 是在当前判定强度下
-验证过的最小可行死区比例；交付采用高种子协议（15），增强版本（20）
-在参数定稿阶段确认。
+0.137183 降至 15 种子的 0.076072（改善 45\%），n200 从 3 种子的
+0.108977 降至 15 种子的 0.084141（改善 23\%）。种子数 3 时 n100
+判定不可靠（未确认），5 及以上稳定。\emph{论文表述必须注明
+"搜索强度相关"}：$d^*$ 是在当前判定强度下验证过的最小可行死区比例；
+交付采用高种子协议（15），增强版本（20）在参数定稿阶段确认。
 
 \section{S2：二分终止精度灵敏度}
 

@@ -60,10 +60,13 @@ def write_csv(name, header, rows):
 
 
 def s1_t2div(rows):
-    """S1: t2-div 灵敏度。按 (chip, t2_div) 聚合取最小 HPWL。"""
+    """S1: t2-div 灵敏度。统一 repeats=16 协议（排除 30 轮的 sens 系列），
+    按 (chip, t2_div) 聚合取最小 HPWL。"""
     print("[S1] t2-div 灵敏度")
     best = {}
     for r in rows:
+        if int(r["repeats"]) != 16:
+            continue
         key = (r["chip"], int(f(r["t2_div"])))
         cand = f(r["hpwl"])
         if key not in best or cand < best[key]:
