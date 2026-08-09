@@ -233,7 +233,7 @@ def _run_chip_sa(cfg, chip, force):
                 state.cur_cfg = ""
                 return ("stop", out_path)
         seed = 20260808 + r
-        cmd = [BIN, "q1" if q == "q1" else "q2", "0.5",
+        cmd = [BIN, "q1" if q == "q1" else "q2", str(cfg.get("lambda", 0.5)),
                os.path.join(DATA, f"{chip}.blocks"),
                os.path.join(DATA, f"{chip}.nets"),
                os.path.join(DATA, f"{chip}.pl"),
@@ -475,7 +475,7 @@ def main():
     if args.group in (None, "sens"):
         cfgs += sensitivity_configs()
     for c in cfgs:
-        c["repeats"] = args.repeats
+        c.setdefault("repeats", args.repeats)
     state = State()
     state.max_hours = args.max_hours
 
