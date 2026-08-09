@@ -1,0 +1,9 @@
+chip,judge_seeds,confirm_seeds,d_star,confirmed
+n100,3,7,0.134811,False
+n100,3,10,0.134811,False
+n100,5,7,0.116061,False
+n100,5,10,0.116061,False
+n200,3,7,0.108677,True
+n200,3,10,0.108077,False
+n200,5,7,0.102818,True
+n200,5,10,0.102218,False

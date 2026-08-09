@@ -3,32 +3,14 @@
 \usepackage{amsmath, amssymb}
 \usepackage{geometry}
 \usepackage{booktabs}
-\usepackage{listings}
-\usepackage{xcolor}
-\usepackage{tcolorbox}
 \usepackage{enumitem}
-\usepackage{hyperref}
+\usepackage{tcolorbox}
 \usepackage{float}
-\usepackage{tikz}
-\usetikzlibrary{arrows.meta, positioning}
+\usepackage{hyperref}
 
 \geometry{left=2.5cm, right=2.5cm, top=2.5cm, bottom=2.5cm}
 
-\lstset{
-    language=Python,
-    basicstyle=\ttfamily\small,
-    keywordstyle=\color{blue}\bfseries,
-    commentstyle=\color{gray},
-    stringstyle=\color{red},
-    showstringspaces=false,
-    breaklines=true,
-    frame=single,
-    numbers=left,
-    numberstyle=\tiny\color{gray},
-    tabsize=4,
-}
-
-\title{\textbf{Q3 代码架构与运行逻辑完全指南}\\[6pt]
+\title{\textbf{问题三 模型建立与求解（论文手工作稿）}\\[6pt]
 \large VLSI 布图规划设计 --- 最小可行死区比例的二分搜索}
 \author{2026 年第七届"华数杯"大学生数学建模竞赛 B 题}
 \date{2026/08}
@@ -39,285 +21,313 @@
 \newpage
 
 % ============================================================
-\section{项目总体架构}
+\section{问题重述与模型建立}
 % ============================================================
 
-\subsection{目录结构}
+\subsection{问题重述}
 
-\begin{lstlisting}[language=bash]
-The_7th_Huashu_Cup.../
-|-- cpp_solver/                  # C++ 共享核心（Q2 模式 + --feas-only 判定）
-|   `-- src/
-|       |-- floor_plan.hpp       # B*-Tree 拓扑 + Skyline 解码 + 解析器
-|       |-- sa.hpp               # 两阶段退火（run 找可行 + run2 精修）
-|       `-- main.cpp             # CLI（q2 模式 / --feas-only / --seed）
-|-- common/
-|   `-- verify.py                # 独立合法性复核
-|-- q3/                          # 问题 3 客制层（<-- 本文件）
-|   |-- q3_bisect.py             # 二分搜索 + 并行多种子判定 + 双向确认
-|   |-- q3_solver.py             # 驱动：二分 + d* 处完整求解 + 汇总出图
-|   |-- output/
-|   |   |-- q3_metrics.csv       # d*/side/HPWL/confirm 记录/合法性
-|   |   |-- q3_<chip>_bisect.csv # 二分轨迹（可审计）
-|   |   |-- q3_<chip>.rpt/log    # d* 处最优布局 + 收敛轨迹
-|   `-- visualization/
-|       |-- plot_bisect.py       # 二分轨迹图（区间收缩/可行标记/d* 标注）
-|       |-- plot_{floorplan,convergence,snapshots}.py
-|       `-- figs/<时间戳>/<chip>/  # 每芯片 12 张图（含 bisect 轨迹）
-`-- paper/
-\end{lstlisting}
+\subsubsection*{背景与意义}
 
-\subsection{执行顺序}
+死区比例（dead-space ratio）$d$ 刻画轮廓面积相对模块总面积的富余程度：
+$d = 0$ 表示轮廓面积恰好等于模块总面积（理论最紧），$d$ 越大轮廓越宽松、
+布图越容易。给定 $d$，正方形轮廓边长按题面公式确定；由
+$\eta = 1/(1+d)$ 可知，死区比例直接决定面积利用率上界——$d$ 越小、
+轮廓越紧，芯片面积利用率越高，但布图可行难度越大。问题 3 的实质是
+寻找"可行与不可行"的临界点：\textbf{轮廓最多能压到多紧，仍能放下
+全部模块}。这是典型的"单调判定问题的二分求解"结构。
 
-\begin{tcolorbox}[colback=blue!5, colframe=blue!60, title=执行顺序]
+\subsubsection*{题目重述}
+
+问题 3 要求：在固定正方形轮廓（边长由死区比例 $d$ 决定）下，求
+\textbf{最小可行死区比例} $d^*$——即存在合法无重叠布图的 $d$ 的最小值；
+并在 $d^*$ 处给出 HPWL 最优的完整布局。
+
+轮廓边长：
+\begin{equation}
+\label{eq:q3side}
+\text{side}(d) = \Big\lceil \sqrt{\Sigma A\,(1+d)} \Big\rceil,
+\qquad d \in [0,\ 0.15],
+\end{equation}
+其中 $d = 0.15$ 即问题 2 的基准轮廓（已由问题 2 验证可行），因此
+$d^*$ 必落在 $[0, 0.15]$ 内，可作为二分搜索的上界起点。
+
+\subsubsection*{输入数据}
+
+输入与问题 2 完全相同：\texttt{.blocks}（模块尺寸）、\texttt{.nets}
+（线网连接）、\texttt{.pl}（端子坐标）。三组芯片规模与轮廓对照如下：
+
+\begin{table}[H]
+\centering
+\caption{三组芯片数据规模}
+\begin{tabular}{lcccc}
+\toprule
+芯片 & 模块数 $n$ & 端子数 & 线网数 & 基准 side($d{=}0.15$) \\
+\midrule
+n100 & 100 & 334 & 885 & 455 \\
+n200 & 200 & 564 & 1585 & 450 \\
+n300 & 300 & 569 & 1893 & 561 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection*{数学形式化}
+
+定义\textbf{可行性判定}：对任意死区比例 $d$，
+\begin{equation}
+\text{feasible}(d) \;\Longleftrightarrow\;
+\exists\, \text{合法布图于 } \text{side}(d) \text{ 轮廓内},
+\end{equation}
+其中"合法"定义为无重叠、尺寸保持且不越界：
+\begin{equation}
+\text{合法} \;\equiv\; \text{无重叠} \wedge \text{尺寸保持}
+\wedge W \le \text{side}(d) \wedge H \le \text{side}(d).
+\end{equation}
+
+则问题 3 的形式化表述为
+\begin{equation}
+d^* = \min \big\{ d \in [0,\ 0.15] : \text{feasible}(d) \big\},
+\end{equation}
+并在 $d^*$ 处求解 $\min H$（HPWL 最优的完整布局）。
+
+\textbf{单调性（二分适用性的数学依据）}：$\text{side}(d)$ 随 $d$ 单调不减
+$\Rightarrow$ 轮廓内可行区域单调扩大 $\Rightarrow$ $\text{feasible}(d)$
+为\textbf{单调布尔函数}：$d \ge d^*$ 可行、$d < d^*$ 不可行，0/1 边界唯一。
+因此求 $d^*$ 等价于在单调函数上定位阈值，二分搜索在 $\lceil \log_2
+(0.15/\varepsilon) \rceil$ 次判定内收敛。
+
+\subsubsection*{目标与问题性质}
+
+两级目标：主目标 $\min d^*$（可行临界点，反映布局的紧凑能力）；
+次目标在 $d^*$ 处 $\min H$（给出实际可用布局）。本问与问题 2 的关键
+差异在于\textbf{目标从优化变为判定}：每次可行性判定由启发式模拟退火完成，
+"找不到可行解"可能是\textbf{搜索不足}（假阴性）而非真不可行——判定
+可靠性成为求解质量的决定性因素，需要\textbf{并行多种子判定 + 双向确认}
+两级防护（详见求解算法节）。
+
+\subsection{问题分析}
+
+\subsubsection{判定可靠性：启发式的假阴性问题}
+
+可行性判定由模拟退火完成："找不到可行解"可能是\textbf{搜索不足}（假阴性）
+而非真不可行。若把单次判定结果当真，$d^*$ 会被\textbf{系统性推高}
+（早期单种子版本 n300 达 0.142）。为此采用两级防护：
+
 \begin{enumerate}
-    \item \texttt{cd cpp\_solver \&\& make}（编译 bin/main）
-    \item \texttt{conda activate math}
-    \item \texttt{python q3/q3\_solver.py --repeats 8}
-          （二分 + d* 处多起点求解 + 汇总 + 出图）
+    \item \textbf{并行多种子判定}：每比例并行 $K$ 个独立种子，
+    \textbf{任一可行即可行}，假阴性概率按种子数指数下降：
+    \begin{equation}
+    \text{feasible}(d) = \bigvee_{s=1}^{K} \text{feasible}_s(d), \qquad
+    P(\text{假阴性}) \approx \prod_{s=1}^{K} P(\text{假阴性}_s);
+    \end{equation}
+    \item \textbf{双向确认}：收敛后确认 $d^*$ 本身可行、
+    且 $d^* - \varepsilon$ 处多种子\textbf{全不可行}，保证 $d^*$ 是
+    "验证过的最小稳定点"而非搜索运气。
+\end{enumerate}
+
+另外，面积下界 $\text{side}(d)^2 \ge \Sigma A$ 恒成立，全程断言保证
+轮廓定义的合法性。
+
+% ============================================================
+\section{求解算法设计}
+% ============================================================
+
+\subsection{总体框架}
+
+\begin{tcolorbox}[colback=blue!5, colframe=blue!60, title=算法流程]
+\begin{enumerate}
+    \item 二分区间 $[0, 0.15]$（$0.15$ 即问题 2 基准，已知可行）；
+    \item 每步取 $mid = (lo+hi)/2$，并行多种子判定可行性：
+    任一可行 $\Rightarrow hi = mid$，否则 $lo = mid$；
+    \item 终止：$hi - lo < \varepsilon = 10^{-4}$（约 11 次迭代）；
+    \item \textbf{双向确认}：$d^*$ 可行且 $d^*-\varepsilon$ 全不可行
+    （否则上移/下移重验，最多 12 步）；
+    \item 在 $d^*$ 处完整求解：多起点并行取 HPWL 最优。
 \end{enumerate}
 \end{tcolorbox}
 
-\subsection{核心设计理念}
+\subsection{可行性判定（--feas-only）}
 
-\textbf{问题本质}：随死区比例 $d$ 减小，轮廓 $W=H=\lceil\sqrt{\Sigma A(1+d)}\rceil$
-同步缩小，存在可行布局的概率单调下降——最小可行 $d^*$ 是"可行性随 $d$ 单调"
-的二分搜索问题。
-
-\textbf{判定可靠性}：SA 是启发式，"找不到可行解"可能是搜索不足（假阴性）而非
-真不可行。为此：① 每比例\textbf{并行多种子判定}（任一可行即可行）；
-② 收敛后\textbf{双向确认}（$d^*$ 本身必须可行，$d^*-\varepsilon$ 处多种子
-必须全不可行）——保证 $d^*$ 是"验证过的最小稳定点"。
-
-% ============================================================
-\section{Q3 求解流程}
-% ============================================================
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[
-  node distance=1.0cm,
-  box/.style={draw, rounded corners=2pt, fill=blue!8, align=center,
-              text width=7.2cm, minimum height=0.9cm},
-  dec/.style={draw, rounded corners=2pt, fill=orange!15, align=center,
-              text width=7.2cm, minimum height=0.9cm},
-  term/.style={draw, rounded corners=8pt, fill=green!12, align=center,
-               text width=7.2cm, minimum height=0.9cm},
-  arrow/.style={-{Stealth[length=3mm]}, thick},
-]
-\node[term] (start) {二分区间 $[0, 0.15]$（0.15 已知可行）};
-\node[box, below=of start] (mid) {$mid=(lo+hi)/2$，理论下界断言 $side^2\ge\Sigma A$};
-\node[box, below=of mid] (check) {并行多种子判定（粗区间 2、精区间 3 种子）\\ \texttt{bin/main q2 --feas-only --seed s}};
-\node[dec, below=of check] (branch) {任一判定可行？};
-\node[box, below left=1.0cm and -0.5cm of branch] (hi) {$hi=mid$};
-\node[box, below right=1.0cm and -0.5cm of branch] (lo) {$lo=mid$};
-\node[dec, below=of hi] (term) {$hi-lo<10^{-4}$？};
-\node[box, below=of term] (confirm) {双向确认：$d^*$ 可行、$d^*-\varepsilon$ 多种子全不可行\\（否则上移/下移重验，最多 12 步）};
-\node[box, below=of confirm] (full) {在 $d^*$ 处完整求解（多起点 8 轮取 HPWL 最优）};
-\node[term, below=of full] (out) {产出：\texttt{q3\_metrics.csv} + 每芯片 12 图};
-\draw[arrow] (start) -- (mid);
-\draw[arrow] (mid) -- (check);
-\draw[arrow] (check) -- (branch);
-\draw[arrow] (branch) -- node[left] {是} (hi);
-\draw[arrow] (branch) -- node[right] {否} (lo);
-\draw[arrow] (lo) -- ++(0,-0.6) -| (check);
-\draw[arrow] (hi) -- (term);
-\draw[arrow] (term) -- node[left] {否} (mid);
-\draw[arrow] (term) -- node[right] {是} (confirm);
-\draw[arrow] (confirm) -- (full);
-\draw[arrow] (full) -- (out);
-\end{tikzpicture}
-\caption{Q3 二分搜索 + 双向确认流程}
-\end{figure}
-
-% ============================================================
-\section{二分搜索算法（q3\_bisect.py）}
-% ============================================================
-
-\subsection{判定调用（--feas-only）}
-
-共享核心提供可行性判定模式：
-\begin{lstlisting}[language=bash]
+共享 C++ 核心提供判定模式：
+{\footnotesize
+\begin{verbatim}
 ./bin/main q2 0.5 <blocks> <nets> <pl> <rpt> <dead> --feas-only --seed <s>
 # 输出 3 行：feasible(0/1) / bbox W H / hpwl
-\end{lstlisting}
+\end{verbatim}
+}
 
 \begin{itemize}
-    \item 只跑 \texttt{run()} 可行性阶段，找到首个可行解即返回（早停）。
-    \item reset 上限保证单次判定有界（$N/16+1$ 次温度重置）。
+    \item 只跑可行性阶段（run），找到\textbf{首个可行解即早停返回}；
+    \item 温度重置上限保证单次判定时间有界；
     \item 固定种子 $\Rightarrow$ 判定可复现。
 \end{itemize}
 
 \subsection{并行多种子判定}
 
-单种子判定存在假阴性（差种子搜索不足）。每比例并行 $K$ 个独立种子
-（粗区间 $K=2$、精区间 $K=3$），\textbf{任一可行即可行}：
-
-\begin{equation}
-\text{feasible}(d) = \bigvee_{s=1}^{K} \text{feasible}_s(d),
-\qquad
-P(\text{假阴性}) \approx \prod_{s=1}^{K} P(\text{假阴性}_s)
-\end{equation}
-
-判定种子确定性与互异：\texttt{seed = BASE + chip\_idx*10000 + tag*100 + i}。
-
-\subsection{二分与终止}
-
 \begin{itemize}
-    \item 区间 $[0, 0.15]$（0.15 即 Q2 基准，已知可行）。
-    \item 终止：$hi - lo < 10^{-4}$（约 11 次迭代，精度 $1.4\times10^{-7}$ 内）。
-    \item 每步记录轨迹（iter/lo/hi/mid/side/bbox/feasible/耗时）到
-          \texttt{q3\_<chip>\_bisect.csv}（可审计）。
-    \item 理论下界全程断言：$side^2 \ge \Sigma A$ 恒成立。
+    \item 种子确定性与互异：
+    \texttt{seed = BASE + chip\_idx*10000 + tag*100 + i}；
+    \item 粗区间（$hi - lo \ge 0.01$）用少量种子、精区间用更多种子
+    （交付：粗 2 / 精 3；参数扫描后增强至 5--15，见 \ref{sec:q3seed}）；
+    \item 判定为 OR 语义：任一种子找到可行解即可行。
 \end{itemize}
 
 \subsection{双向确认（正确性关键）}
 
-二分收敛的 $d_{bisect}$ 可能受判定波动影响，做\textbf{双向确认}：
+二分收敛的 $d_{\text{bisect}}$ 仍可能受判定波动影响，做\textbf{双向确认}：
 
 \begin{enumerate}
-    \item 在 $d$ 处做 $K_{verify}=3$ 种子判定，\textbf{必须可行}；
-          若不可行 $\Rightarrow$ 上移 $d \mathrel{+}= \varepsilon$ 重验。
-    \item 在 $d-\varepsilon$ 处做 3 种子判定，\textbf{必须全不可行}；
-          若有可行 $\Rightarrow$ 下移 $d \mathrel{-}= \varepsilon$ 重验。
-    \item 循环直至两点同时满足（最多 12 步），记录每步结果。
+    \item 在 $d$ 处做 $K_{\text{verify}}$ 种子判定，\textbf{必须可行}；
+    若不可行 $\Rightarrow$ 上移 $d \mathrel{+}= \varepsilon$ 重验；
+    \item 在 $d - \varepsilon$ 处做 $K_{\text{verify}}$ 种子判定，
+    \textbf{必须全不可行}；若有可行 $\Rightarrow$ 下移
+    $d \mathrel{-}= \varepsilon$ 重验；
+    \item 循环直至两点同时满足（最多 12 步），每步记录
+    \texttt{confirm\_steps}（可审计）。
 \end{enumerate}
 
-最终 $d^*$ 满足：\texttt{d\_feas=True} 且 \texttt{below\_infeas=True}
-（$d^*-\varepsilon$ 处 $[False,False,False]$）——即
-\textbf{验证过的最小稳定点}，写入 \texttt{confirm\_steps} 可审计。
+最终 $d^*$ 满足 \texttt{d\_feas=True} 且 \texttt{below\_infeas=True}
+（$d^*-\varepsilon$ 处如 \texttt{[False,\allowbreak False,\allowbreak False]}），即
+\textbf{验证过的最小稳定点}。
 
-% ============================================================
-\section{Phase：d* 处完整求解（q3\_solver.py）}
-% ============================================================
+\subsection{d$^*$ 处完整求解}
 
-\begin{itemize}
-    \item 在 $d^*$ 处调用完整 Q2 求解（run + run2 $\times 2$），
-          多起点 8 轮并行取 HPWL 最优（复用 q2 逻辑）。
-    \item 只接受可行轮次（bbox $\le$ side）；保留 best 的 rpt/log。
-    \item 独立复核：无重叠 / 尺寸保持 / 不越界（common/verify.py）。
-    \item 产出：\texttt{q3\_metrics.csv}（d*/side/HPWL/confirm/合法性）
-          + 每芯片 12 张图（9 快照 + 收敛 + 布图 + bisect 轨迹）。
-\end{itemize}
+在 $d^*$ 处调用完整 Q2 求解（run + run2），多起点并行取 HPWL 最优，
+只接受可行轮次（bbox $\le$ side），保留 best 的 rpt/log 与独立复核。
 
-% ============================================================
-\section{判定可靠性讨论}
-% ============================================================
+\subsection{参数调优}
+\label{sec:q3seed}
 
-\subsection{为什么需要并行多种子判定？}
-
-早期版本（单种子判定）二分结果受种子运气影响：同一比例不同种子判定结果
-可相互矛盾（0.14209 判不可行、0.14206 判可行），导致 $d^*$ 被推高
-（n300 达 0.142）。并行多种子判定将假阴性概率按种子数指数下降，
-n300 $d^*$ 从 0.142 改善到 0.125。
-
-\subsection{为什么需要双向确认？}
-
-二分只保证"最后一个判可行的 mid 为上界"，不保证 $d^*-\varepsilon$ 处
-真不可行。双向确认把"可行/不可行"两个方向都验证到稳定，
-$d^*$ 的语义是"在当前搜索强度下验证过的最小可行比例"——
-论文表述严谨（不声称超越搜索能力的真最优）。
-
-\subsection{与理论下界的关系}
-
-$d$ 的理论下界为 0（$side^2 \ge \Sigma A$ 恒满足）；实际最小 $d$ 由
-打包效率决定。搜索能力内的 $d^*$ 是保守估计（可能略高于真值），
-但确认记录保证其"验证过"性质。
-
-% ============================================================
-\section{测试与验证}
-% ============================================================
-
-\begin{itemize}
-    \item \textbf{理论下界断言}：每次判定 $side^2 \ge \Sigma A$。
-    \item \textbf{confirm 记录}：\texttt{d\_feas} 与 \texttt{below\_infeas}
-          双条件满足才算通过（\texttt{d\_confirmed\_minimum=True}）。
-    \item \textbf{轨迹审计}：\texttt{q3\_<chip>\_bisect.csv} 每步完整记录。
-    \item \textbf{最终布局复核}：Python 独立验证（无重叠/尺寸/越界）。
-    \item C++ 测试：feas-only 正反例、run 快照、HPWL oracle（1135 断言）。
-\end{itemize}
-
-% ============================================================
-\section{实际运行结果}
-% ============================================================
-
-\subsection{最小死区比例（并行判定 + 双向确认）}
+% TODO: seed 扫描完成后，以 scan/results/q3 更新本表。
+判定种子数是 $d^*$ 精度的\textbf{决定性参数}：种子越多，假阴性越低，
+$d^*$ 越小。参数扫描（\texttt{scan/results/q3}，n100）显示：
 
 \begin{table}[H]
 \centering
-\begin{tabular}{lccccccc}
+\small
+\caption{判定种子数对 $d^*$ 的影响（n100，TODO：定稿后更新）}
+\begin{tabular}{lccccc}
 \toprule
-芯片 & $d^*$ & side & HPWL & 迭代 & 确认步数 & 确认通过 & 合法性 \\
+判定种子 & 3 & 5 & 7 & 10 & 15 \\
 \midrule
-n100 & 0.117307 & 448 & 293671 & 11 & 2 & 是 & 合法 \\
-n200 & 0.108977 & 442 & 544534 & 11 & 4 & 是 & 合法 \\
-n300 & 0.124885 & 555 & 826685 & 11 & 6 & 是 & 合法 \\
+$d^*$ & 0.134811 & 0.117161 & 0.082131 & 0.081931 & 0.076072 \\
+确认 & 否 & 是 & 是 & 是 & 是 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{itemize}
-    \item 全部芯片 \texttt{d\_confirmed\_minimum=True}：
-          最终 $d^*-\varepsilon$ 处 3 种子判定全不可行
-          （\texttt{below\_results=[False,False,False]}）。
-    \item n300 确认过程含 4 次上移（$d^*$ 处判定波动），最终在
-          0.124885 稳定——确认记录完整可审计。
-    \item $d^*$ 处 HPWL 大于 Q2（轮廓更紧、搜索更困难），合法且合理。
+    \item $d^*$ 随种子数\textbf{持续下降}（3 $\to$ 15 改善约 44\%），
+    说明判定强度直接决定"验证过的最小值"；
+    \item 论文表述必须注明\textbf{搜索强度相关}：
+    "$d^*$ 是在当前搜索强度（种子数）下验证过的最小可行死区比例"；
+    \item 交付值取中等强度（判定 3 / 确认 3），定稿建议升级至
+    判定 15 / 确认 15。
 \end{itemize}
 
-% ============================================================
-\section{文件依赖关系}
-% ============================================================
-
-\begin{lstlisting}
-q3_solver.py
-  |-- q3_bisect.py               (二分 + 判定 + 确认)
-  |-- cpp_solver/bin/main        (q2 模式 + --feas-only + --seed)
-  |-- data/raw/{n100,n200,n300}.{blocks,nets,pl}
-  |-- common/verify.py
-  `-- q3/visualization/plot_{bisect,floorplan,convergence,snapshots}.py
-\end{lstlisting}
-
-% ============================================================
-\section{运行指南}
-% ============================================================
-
-\subsection{环境要求}
+\subsection{复杂度分析}
 
 \begin{itemize}
-    \item g++（\texttt{-std=c++17}）；conda 环境 \texttt{math}。
-    \item TeX Live 2026（xelatex + ctex，编译本指南）。
+    \item 二分迭代次数：$\lceil \log_2(0.15/\varepsilon) \rceil \approx 11$；
+    \item 每次判定：$K$ 个种子 $\times$ 单次可行搜索（有界）；
+    \item 总成本约 $11 \times K \times T_{\text{feas}}$，$K$ 与
+    $T_{\text{feas}}$ 随芯片规模增长（n300 为最重实例）。
 \end{itemize}
 
-\subsection{完整运行流程}
+% ============================================================
+\section{结果与验证}
+% ============================================================
 
-\begin{lstlisting}[language=bash]
-cd cpp_solver && make
-cd ..
+\subsection{求解结果}
+
+% TODO: seed 扫描定稿后，以 scan/results/q3 与 q3/output/q3_metrics.csv 更新。
+\begin{table}[H]
+\centering
+\small
+\caption{Q3 最小可行死区比例（冻结交付，判定 3 / 确认 3 种子）}
+\begin{tabular}{lccccc}
+\toprule
+芯片 & $d^*$ & 轮廓 side & HPWL & 确认 & 合法性 \\
+\midrule
+n100 & 0.117307 & 448 & 293671.5 & 是 & 合法 \\
+n200 & 0.108977 & 442 & 544534.5 & 是 & 合法 \\
+n300 & 0.124885 & 555 & 826685.0 & 是 & 合法 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Q3 增强判定种子结果（判定 15 / 确认 15，TODO：定稿后并入上表）}
+\begin{tabular}{lccc}
+\toprule
+芯片 & $d^*$ & 较冻结改善 & 状态 \\
+\midrule
+n100 & 0.076072 & $-35.2\%$ & 已完成 \\
+n200 & 0.084141 & $-22.8\%$ & 已完成 \\
+n300 & 待定 & 待定 & 扫描中 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{判定可靠性讨论}
+
+\begin{itemize}
+    \item \textbf{为什么需要并行多种子}：早期单种子判定下，同一比例
+    不同种子的判定结果可相互矛盾（如 0.14209 判不可行、0.14206
+    判可行），$d^*$ 被推高（n300 达 0.142）；并行多种子将假阴性概率
+    按指数下降，n300 的 $d^*$ 从 0.142 改善到 0.125；
+    \item \textbf{为什么需要双向确认}：二分收敛点可能恰在判定波动
+    区间内，双向确认保证 $d^*$ 是"可行且下方不可行"的稳定点，
+    \texttt{confirm\_steps} 全程可审计；
+    \item \textbf{稳定性}：$d^*$ 对搜索强度敏感（见 \ref{sec:q3seed}），
+    论文需如实标注"搜索强度相关"，并采用定稿的判定种子协议。
+\end{itemize}
+
+\subsection{独立合法性复核}
+
+二分轨迹（iter/lo/hi/mid/side/bbox/耗时）全程记录至
+\texttt{q3\_<chip>\_bisect.csv}；$d^*$ 处布局经独立 Python 复核
+（无重叠 / 尺寸保持 / 不越界），三芯片全部通过。
+
+% ============================================================
+\section{正确性保障与可复现性}
+% ============================================================
+
+\subsection{工程保障}
+
+\begin{itemize}
+    \item 判定复用共享核心（1135 断言 + ASan/UBSan 双轨验证）；
+    \item 面积下界全程断言：$\text{side}^2 \ge \Sigma A$ 恒成立；
+    \item 种子确定性：判定与确认种子由固定公式生成，可复现；
+    \item \texttt{confirm\_steps} 与二分轨迹 CSV 可审计
+    （论文附录可直接引用）。
+\end{itemize}
+
+\subsection{运行命令与产物}
+
+{\small
+\begin{verbatim}
+cd cpp_solver && make && make test
 conda activate math
 python q3/q3_solver.py --repeats 8   # 二分 + d* 求解 + 汇总 + 出图
-\end{lstlisting}
-
-\subsection{常见问题}
-
-\begin{enumerate}
-    \item \textbf{d* 偏保守}：判定强度与搜索深度相关——可提高判定种子数
-          （\texttt{PRECISE\_SEEDS}）或判定搜索强度（参数优化阶段）。
-    \item \textbf{确认失败}：\texttt{d\_confirmed\_minimum=False} 时
-          结果不可交付——增大确认步数或判定种子后重跑。
-    \item \textbf{复现}：所有判定/求解使用固定种子公式
-          （\texttt{BASE + chip\_idx*10000 + tag*100 + i}），可精确复现。
-\end{enumerate}
-
-% ============================================================
-\section{合规清单}
-% ============================================================
+\end{verbatim}
+}
 
 \begin{itemize}
-    \item 原始数据只读；二分/判定/求解全部种子显式管理（可复现）。
-    \item \texttt{d\_confirmed\_minimum} 为交付硬性前提（三芯片均为 True）。
-    \item 判定波动与保守性如实记录（第 5 节），未作任何美化。
-    \item 论文表述建议："在当前搜索强度下验证过的最小可行死区比例"。
+    \item \texttt{q3/output/q3\_metrics.csv}：d$^*$/side/HPWL/确认记录；
+    \item \texttt{q3/output/q3\_<chip>\_bisect.csv}：二分轨迹；
+    \item \texttt{q3/output/q3\_<chip>.rpt/log}：$d^*$ 处最优布局。
 \end{itemize}
+
+% ============================================================
+\begin{thebibliography}{9}
+\bibitem{bstar} Chang Y C, Chang Y W, Wu G M, et al. B*-Trees: a new
+  representation for non-slicing floorplans[C]// Proceedings of the 37th
+  Annual Design Automation Conference (DAC). 2000: 458--463.
+\bibitem{fastsa} Chen T C, Chang Y W. Modern floorplanning based on B*-tree
+  and fast simulated annealing[J]. IEEE Transactions on Computer-Aided
+  Design of Integrated Circuits and Systems, 2006, 25(4): 637--650.
+\end{thebibliography}
 
 \end{document}

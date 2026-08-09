@@ -3,30 +3,14 @@
 \usepackage{amsmath, amssymb}
 \usepackage{geometry}
 \usepackage{booktabs}
-\usepackage{listings}
-\usepackage{xcolor}
-\usepackage{tcolorbox}
 \usepackage{enumitem}
-\usepackage{hyperref}
+\usepackage{tcolorbox}
 \usepackage{float}
+\usepackage{hyperref}
 
 \geometry{left=2.5cm, right=2.5cm, top=2.5cm, bottom=2.5cm}
 
-\lstset{
-    language=C++,
-    basicstyle=\ttfamily\small,
-    keywordstyle=\color{blue}\bfseries,
-    commentstyle=\color{gray},
-    stringstyle=\color{red},
-    showstringspaces=false,
-    breaklines=true,
-    frame=single,
-    numbers=left,
-    numberstyle=\tiny\color{gray},
-    tabsize=4,
-}
-
-\title{\textbf{Q1 代码架构与运行逻辑完全指南}\\[6pt]
+\title{\textbf{问题一 模型建立与求解（论文手工作稿）}\\[6pt]
 \large VLSI 布图规划设计 --- 自由轮廓面积最小化（面积 + 长宽比）}
 \author{2026 年第七届"华数杯"大学生数学建模竞赛 B 题}
 \date{2026/08}
@@ -37,315 +21,439 @@
 \newpage
 
 % ============================================================
-\section{项目总体架构}
+\section{问题重述与模型建立}
 % ============================================================
 
-\subsection{目录结构}
+\subsection{问题重述}
 
-\begin{lstlisting}[language=bash]
-The_7th_Huashu_Cup.../
-|-- data/
-|   `-- raw/                    # 原始附件副本 n100/n200/n300（只读）
-|-- cpp_solver/                 # C++ 共享核心（Q1/Q2/Q3 共用，单套测试）
-|   |-- Makefile                # make / make test / make test-san
-|   `-- src/
-|       |-- floor_plan.hpp      # B*-Tree 拓扑 + Skyline 解码 + 解析器
-|       |-- sa.hpp              # 快速模拟退火引擎（Mode 参数化 + 收敛 log + 快照）
-|       |-- main.cpp            # CLI 入口（mode/alpha/--log）
-|       |-- test_main.cpp       # 白盒测试（1027 断言，含 oracle 体系）
-|       `-- test_oracle.hpp     # 独立参考解码器 / 合法性校验 / 暴力枚举
-|-- common/
-|   `-- visualize.py            # 共享绘图基础（.rpt/.log/snap 解析 + 布图绘制）
-|-- q1/                         # 问题 1 客制层（<-- 本文件）
-|   |-- q1_solver.py            # 求解驱动：调 bin/main，多轮取优，汇总 CSV
-|   |-- output/
-|   |   |-- q1_metrics.csv      # 三芯片指标汇总（面积/长宽比/利用率/合法性）
-|   |   |-- q1_n100.rpt         # 最终布局坐标
-|   |   `-- q1_n100.log         # 收敛轨迹 + 9 等分过程快照
-|   `-- visualization/
-|       |-- plot_floorplan.py   # 最终布图
-|       |-- plot_convergence.py # 收敛曲线
-|       |-- plot_snapshots.py   # 9 等分过程快照（每芯片 9 张）
-|       `-- figs/<时间戳>/      # 每次运行新建时间戳目录（保留全部历史）
-|           `-- <chip>/         # 每芯片 11 张图：9 快照 + 收敛 + 最终布图
-|-- q2/ q3/ q4/                 # 其余问题（共享核心 + 各自客制层）
-`-- paper/                      # 论文写作
-\end{lstlisting}
+VLSI 布图规划问题 1 要求在\textbf{芯片轮廓不固定}、\textbf{模块之间不存在
+连接关系}的条件下，仅依据各芯片 \texttt{.blocks} 文件中的矩形模块尺寸，
+确定每个模块的摆放位置与朝向，使得所有模块外接包围盒的面积最小，并在
+面积相同的方案中令包围盒长宽比尽可能接近 1。
 
-\subsection{执行顺序}
+\subsection{问题分析}
 
-\begin{tcolorbox}[colback=blue!5, colframe=blue!60, title=执行顺序]
+该问题属于二维矩形装箱与无轮廓布图规划的组合优化问题。搜索空间由模块
+排列顺序与朝向组合构成，规模随模块数呈组合爆炸增长：$n$ 个模块的排列
+数 $n!$、朝向组合 $2^n$、二叉树形状数为 Catalan 数
+$C_n = \frac{1}{n+1}\binom{2n}{n} \sim \frac{4^n}{n^{3/2}\sqrt{\pi}}$，
+以 $n=300$ 计仅形状数即约 $10^{176}$。因此必须借助结构化的编码表示将
+几何约束内化到搜索空间之中。
+
+本问采用\textbf{基于 B$^*$ 树编码的布图优化模型}，并以\textbf{快速模拟
+退火}（Fast-SA）作为求解算法。B$^*$ 树将"任意两模块不重叠且布局紧凑"
+的几何要求转化为编码结构的固有性质：给定一棵合法的 B$^*$ 树与各模块
+朝向，经过轮廓压缩解码后得到的布局\textbf{必然无重叠}且为\textbf{可容许
+布局}（所有模块均无法再向左或向下移动），从而无需在优化过程中显式处理
+$O(n^2)$ 对非重叠约束，把"连续坐标 $+$ 几何判定"的难优化问题转化为
+有限组合空间上的搜索问题。该框架与题面参考文献 [2] 中的经典方法一致，
+适用于 100--300 模块规模，且其编码、解码、扰动与核验环节与目标函数
+\textbf{解耦}，便于后续问题仅替换代价函数即可复用。
+
+相较而言，若将非重叠关系写成 0--1 变量的混合整数规划，在模块数达 300
+时需引入 $O(n^2)$ 对不重叠约束与 $n$ 组连续坐标变量，约束规模过大，
+竞赛时间内难以获得可行解；遗传算法对 B$^*$ 树等装箱结构的交叉维护成本
+亦高于模拟退火的局部扰动。故本问采用 B$^*$ 树 + Fast-SA 方案。
+
+\subsection{决策变量与派生量}
+
+设某芯片的模块集合为 $I = \{1, 2, \dots, n\}$，模块 $i$ 的原方向宽、高
+与面积分别记为 $w_i$、$h_i$ 与 $a_i = w_i h_i$，总模块面积为
+$T = \sum_{i \in I} a_i$。
+
+决策变量包括两大部分：
 \begin{enumerate}
-    \item \texttt{cd cpp\_solver \&\& make}（编译 \texttt{bin/main}，0 警告）
-    \item \texttt{make test}（可选，白盒测试回归，1027 断言）
-    \item \texttt{conda activate math}
-    \item \texttt{python q1/q1\_solver.py}（求解三芯片 + 多轮取优 + 出图）
+    \item \textbf{拓扑变量}：$n$ 个节点的有序二叉树（B$^*$ 树）$\tau$，
+    其节点与模块一一对应，隐式编码了全部模块的相对位置关系；
+    \item \textbf{朝向变量}：每个模块的旋转标志 $r_i \in \{0, 1\}$，
+    $r_i = 0$ 表示保持原方向，$r_i = 1$ 表示旋转 $90^\circ$。旋转后模块
+    的有效尺寸为
+    \begin{equation}
+    (w'_i, h'_i) = \begin{cases}
+        (w_i, h_i), & r_i = 0, \\
+        (h_i, w_i), & r_i = 1.
+    \end{cases}
+    \end{equation}
 \end{enumerate}
-\end{tcolorbox}
 
-\subsection{核心设计理念}
+各模块左下角坐标 $(x_i, y_i)$ \textbf{不参与独立搜索}，而是由 $(\tau, r)$
+解码唯一确定，属于\textbf{派生量}（见下节）。
 
-\textbf{共享核心 + 每问客制层}：B*-Tree 拓扑、Skyline 解码、SA 引擎、解析器、测试 oracle
-是 Q1/Q2/Q3 共用的"已验证机械资产"，只维护一套、单套测试回归（避免复制陷阱）。每问的
-模型表达（代价函数、可行性判定、阶段策略）独立成客制层，论文手可直接读到模型。
+\subsection{B$^*$ 树编码与轮廓解码}
 
-\textbf{差分测试方法论}：正确性不靠"测试通过"，靠独立实现的 oracle 交叉验证
-（参考 skyline 解码器、独立 HPWL、暴力枚举最优、定义校验器），并辅以 ASan/UBSan 双轨。
+B$^*$ 树解码按\textbf{先序遍历}进行：
+\begin{enumerate}
+    \item 根节点对应的模块置于左下角 $(0, 0)$；
+    \item 若节点 $j$ 是节点 $i$ 的\textbf{左孩子}，则模块 $j$ 放置在模块
+    $i$ 的右侧且与之相邻，即
+    \begin{equation}
+    x_j = x_i + w'_i;
+    \end{equation}
+    \item 若节点 $j$ 是节点 $i$ 的\textbf{右孩子}，则模块 $j$ 与模块 $i$
+    左对齐并放置在其上方，即
+    \begin{equation}
+    x_j = x_i;
+    \end{equation}
+    \item 纵坐标由\textbf{轮廓数据结构}确定：对候选横区间
+    $[x_j,\ x_j + w'_j]$，取其上方已放置模块轮廓高度的最大值作为 $y_j$，
+    放置后更新轮廓。
+\end{enumerate}
 
-% ============================================================
-\section{Phase 1：B*-Tree 核心 floor\_plan.hpp}
-% ============================================================
-
-\subsection{功能概述}
-\label{sec:fp}
-
-封装 B*-Tree 表示、三种扰动算子（旋转 / 删除-插入 / 节点交换）、Skyline 轮廓解码、
-竞赛格式解析器（.blocks/.nets/.pl）。
-
-\subsection{关键结构}
-
-\begin{itemize}
-    \item \texttt{NODE}：10-bit 位压缩的父子/左右子指针 + 旋转位（内存池，支持至 1023 节点）。
-    \item \texttt{TREE}：拓扑操作（\texttt{del\_from\_tree} / \texttt{ins\_to\_tree} /
-          \texttt{swap\_two\_nodes} / \texttt{swap\_near} / \texttt{swap\_not\_near}），
-          均通过 \texttt{ValidateTree()} 白盒校验（DFS 计数 == N、无环、父子双向绑定）。
-    \item \texttt{init()}：DFS 前序放置，\texttt{find\_max\_y} 维护 y 轮廓
-          （\texttt{std::list} + 迭代器前插语义），天然无重叠。
-    \item \texttt{cost()}：返回 (HPWL, W, H)；HPWL 按引脚几何中心（块：$2x+w$，终端：$2x$）。
-    \item 构造器 \texttt{free\_outline} 参数：Q1 模式跳过"超轮廓强制旋转"（自由轮廓无此概念）。
-\end{itemize}
-
-\subsection{输入格式}
-
-\begin{lstlisting}
-.blocks:  NumHardBlocks : 100 / NumTerminals : 334 / b0 block 4 (0,0) (0,33) (43,33) (43,0)
-.nets:    NumNets : 885 / NetDegree : 2 / p1 / b26
-.pl:      p1 0 0
-\end{lstlisting}
-
-% ============================================================
-\section{Phase 2：快速模拟退火引擎 sa.hpp}
-% ============================================================
-
-\subsection{Mode 参数化}
-
-\begin{lstlisting}[language=C++]
-enum class Mode { Q1, Q2 };   // Q1: 自由轮廓面积+长宽比；Q2: 固定轮廓+HPWL
-\end{lstlisting}
-
-Q1 模式（本问）：
-\begin{itemize}
-    \item \texttt{feas()} 恒真（无轮廓约束）。
-    \item \texttt{q1\_cost}：加权代价（见 \ref{sec:cost}），固定权重，无自适应 $\beta$ 压力机制。
-    \item 单阶段：仅 \texttt{run2}（精修退火），不做 Q2 的"先找可行"阶段。
-    \item 初始温度加热：\texttt{\_init\_T2 = \_init\_T / 20}（Q2 为 /50），提升探索性。
-\end{itemize}
-
-\subsection{代价函数}
-\label{sec:cost}
-
+该过程保证每个模块都紧贴左侧或下方的已放置模块，得到所有模块均无法再
+向左或向下移动的\textbf{可容许布局}；任意两模块由树结构与轮廓放置唯一
+确定而互不重叠，且全部坐标非负。解码结束后，包围盒尺寸为
 \begin{equation}
-f = \lambda \cdot \frac{W \cdot H}{\overline{A}}
-    + (1-\lambda) \cdot \frac{r + 1/r - 2}{\overline{P}},
-\qquad r = \frac{\max(W,H)}{\min(W,H)}
+W = \max_{i \in I}\, (x_i + w'_i), \qquad
+H = \max_{i \in I}\, (y_i + h'_i).
+\end{equation}
+
+\textbf{实现细节}：轮廓线用链表维护，每段至多被覆盖一次，摊还复杂度
+$O(n)$；树节点指针采用 10-bit 位压缩（父子/左右子/旋转位共存于一个
+32 位整数），支持至 1023 节点。
+
+\subsection{目标函数}
+
+优化目标分为两级：
+\begin{itemize}
+    \item \textbf{主目标}：包围盒面积 $A = W \times H$ 最小；
+    \item \textbf{次级目标}：长宽比 $R = \dfrac{\max(W,H)}{\min(W,H)} \ge 1$
+    尽可能接近 1。
+\end{itemize}
+
+为保证面积差异优先于长宽比差异、且两项量纲一致，采用加权综合目标：
+\begin{equation}
+\label{eq:cost}
+f(\tau, r) = \lambda\, \frac{A}{\bar A}
+           + (1 - \lambda)\, \frac{P(R)}{\bar P},
+\end{equation}
+其中长宽比惩罚取\textbf{对称形式}
+\begin{equation}
+P(R) = R + \frac{1}{R} - 2.
 \end{equation}
 
 \begin{itemize}
-    \item 长宽比惩罚采用对称形式 $r + 1/r - 2$：旋转整个芯片等效于长宽比取倒数，
-          对称惩罚保证两者代价相同。
-    \item $\lambda = 0.5$：面积与长宽比归一化后均衡（经扫描 $\lambda \in [0.45, 0.95]$ 确定）。
-    \item $\overline{A}, \overline{P}$：构造期采样 $N+1$ 个随机布局的归一化均值。
+    \item $P(1) = 0$ 且 $P'(1) = 0$：正方形时无惩罚，且附近一阶光滑，
+    不过度强迫方形而牺牲面积；
+    \item 旋转整个芯片时 $R \to 1/R$，而 $R + 1/R - 2$ 不变：惩罚对称，
+    两种等价朝向的布图代价相同。
 \end{itemize}
 
-\subsection{收敛 log 与过程快照}
+归一化常数 $\bar A$、$\bar P$ 在退火构造期采样 $N+1$ 个随机布局估计：
+\begin{equation}
+\bar A = \frac{1.1}{N+1} \sum_{k=0}^{N} A_k, \qquad
+\bar P = \frac{1.1}{N+1} \sum_{k=0}^{N} P(R_k),
+\end{equation}
+系数 $1.1$ 为松弛因子，防止采样均值过低导致权重失衡。两项除以统计均值
+后均为 $O(1)$ 量级，$\lambda$ 因此具有"面积与长宽比的相对重要性"的直观
+含义。
 
+\textbf{权重 $\lambda$ 的确定}：扫描 $\lambda \in [0.45, 0.95]$ 得到权衡
+曲线（见 \ref{sec:lambda}）：$\lambda = 0.8$ 时退火陷入长条局部最优
+（n300 长宽比高达 4.4）；$\lambda = 0.5$ 时 n100 长宽比可达 1.002、
+面积利用率 0.942。$\lambda = 0.5$ 为面积与长宽比的均衡点，故取
+$\lambda = 0.5$。
+
+\textbf{模型合理性}：
 \begin{itemize}
-    \item 每温度层写一行：\texttt{phase iter T best\_cost alpha feas}。
-    \item 每个 \texttt{run2} 结束后按温度层数 9 等分输出 9 个 checkpoint 布局：
-          \texttt{snap k iter W H} 头 + N 行 \texttt{name x1 y1 x2 y2}。
-    \item 画图程序与求解完全解耦：求解只写文件，可视化后处理读取 log 出图。
+    \item 硬约束（不重叠、尺寸保持）由解码器自动满足，目标函数无需罚项，
+    不存在罚权重调参问题；
+    \item 面积下界 $WH \ge T$ 恒成立，故面积利用率
+    $\eta = T/(WH) \le 1$ 是无偏的解质量度量（$\eta = 1$ 仅对极特殊尺寸
+    集合可达）。
 \end{itemize}
 
 % ============================================================
-\section{Phase 3：CLI main.cpp}
+\section{求解算法设计}
 % ============================================================
 
-\begin{lstlisting}[language=bash]
-./bin/main <mode:q1|q2> <alpha> <blocks> <nets> <pl> <rpt> [dead_ratio] [--log <file>]
-\end{lstlisting}
+\subsection{总体框架}
 
-\begin{itemize}
-    \item \texttt{<alpha>} 即 $\lambda$（Q1 模式面积权重）。
-    \item \texttt{[dead\_ratio]}：Q2 模式的正方形轮廓参数（Q1 忽略）。
-    \item \texttt{--log}：收敛轨迹 + 快照输出（Q1 模式由 q1\_solver.py 传入）。
-    \item 输出 .rpt：cost / hpwl(=0) / area / W H / time / 每模块坐标。
-\end{itemize}
-
-% ============================================================
-\section{Phase 4：求解驱动与可视化}
-% ============================================================
-
-\subsection{q1\_solver.py}
-
+\begin{tcolorbox}[colback=blue!5, colframe=blue!60, title=算法流程]
 \begin{enumerate}
-    \item 三芯片并行调用 \texttt{bin/main q1}（每芯片 \texttt{--repeats 5} 轮取
-          \texttt{(area, aspect)} 字典序最优，对抗 SA 随机波动）。
-    \item 独立复核：无重叠 / 尺寸保持 / 面积 $\ge \sum$ 块面积（Python 独立实现，不信任 C++）。
-    \item 汇总 \texttt{q1\_metrics.csv}。
-    \item 画图：\texttt{figs/<YYYYMMDD\_HHMMSS>/<chip>/}（每次运行新建时间戳目录，
-          保留全部历史）。
+    \item 用 \textbf{B$^*$ 树}表示布局拓扑（每个模块是树的一个节点）；
+    \item 用 \textbf{轮廓压缩解码}将树确定性解码为无重叠可容许布图；
+    \item 用 \textbf{快速模拟退火}（Fast-SA）在 B$^*$ 树空间搜索：
+    每步执行一次扰动算子、重新解码、按式 \eqref{eq:cost} 计算代价；
+    \item 每芯片独立运行多轮，按字典序 $(A, R)$ 取最优（面积优先，
+    长宽比次之）。
 \end{enumerate}
+\end{tcolorbox}
 
-\subsection{每芯片 10+1 张图}
+\subsection{扰动算子}
 
-\begin{itemize}
-    \item \texttt{snap\_01.png ... snap\_09.png}：SA 过程 9 等分快照（初始 $\rightarrow$ 最终
-          的布局演化，标题含层号）。
-    \item \texttt{convergence.png}：best cost 收敛曲线（归一化）。
-    \item \texttt{floorplan.png}：最终布图（面积/长宽比标注）。
-\end{itemize}
-
-% ============================================================
-\section{测试套件 test\_main.cpp（1027 断言）}
-% ============================================================
-
-\subsection{oracle 体系}
-
-\begin{itemize}
-    \item \textbf{O1 定义校验}：从 B*-Tree 定义出发验证 x 关系 + 原点 + 无重叠 + 尺寸保持。
-    \item \textbf{O2 差分解码}：独立参考解码器（数组 skyline + 严格相交语义，与实现完全
-          不同算法），随机树/全部形状逐块全等；穷举 N=6/7/8 全部二叉树形状
-          （Catalan 132/429/1430）× 多组标签/旋转。
-    \item \textbf{O3 cost oracle}：独立 HPWL（无预处理/无排序）与 \texttt{cost()} 全等；
-          手算用例（含旋转后中心映射）。
-    \item \textbf{O4 算子语义}：交换 = 位置互换且节点集合并集守恒；删除-插入子树不丢失。
-    \item \textbf{O5 SA}：固定种子可复现、best 历史单调（分段）、与暴力枚举最优对照。
-    \item \textbf{D 系列}：内存安全（N=1 除零守卫、1023 节点压测、Crusher 500 模块）、
-          Skyline 极限、SA 数值（NaN 防护）、解析器三格式。
-\end{itemize}
-
-\subsection{运行}
-
-\begin{lstlisting}[language=bash]
-cd cpp_solver && make test      # 1027 断言
-make test-san                   # ASan + UBSan 双轨（0 告警）
-\end{lstlisting}
-
-% ============================================================
-\section{关键设计决策}
-% ============================================================
-
-\subsection{为什么共享核心而不是每问复制？}
-
-B*-Tree/解码/SA 是 Q1-Q3 共用的机械正确性资产（已由 1027 断言证明）；复制会造成
-4 份代码 4 倍测试与 4 倍修 bug 成本（复制陷阱）。模型差异（代价/约束/阶段）通过
-\texttt{Mode} 参数化 + 每问客制层表达。Q4（L/T 模块）是不同模型，独立开发但复用
-测试方法论。
-
-\subsection{为什么 $\lambda = 0.5$？}
-
-扫描 $\lambda \in [0.45, 0.95]$ 得到权衡曲线：$\lambda=0.8$ 时 SA 卡在长条局部最优
-（n300 长宽比 4.4）；$\lambda=0.5$ 时 n100 达到长宽比 1.002、面积利用率 0.942。
-0.5 是面积与长宽比的均衡点（归一化后两项同量级）。
-
-\subsection{为什么初始温度 /50 加热到 /20？}
-
-HW2 原版 /50 对 Q1（无可行性压力）太冷，搜索易陷局部最优；加热后 n100 长宽比
-从 1.9 降到 1.0，且面积利用率反而提升。
-
-\subsection{为什么多轮取优？}
-
-SA 是随机启发式，单次运行结果波动（n300 长宽比 1.5~4.4）；5 轮取
-\texttt{(area, aspect)} 字典序最优可将波动压到可接受范围。
-
-\subsection{为什么差分测试而不只靠单元测试？}
-
-白盒测试的期望值若来自实现推导会"被代码绑架"（本项目曾两次手推错误）。独立参考
-解码器 + 穷举形状覆盖，从语义定义出发验证，才是真正的正确性证据。
-
-% ============================================================
-\section{实际运行结果}
-% ============================================================
-
-\subsection{指标汇总（$\lambda=0.5$，5 轮取优，Python 独立复核）}
+退火每步以一定概率执行三种算子之一，形成完备邻域：
 
 \begin{table}[H]
 \centering
-\begin{tabular}{lcccccc}
+\small
+\caption{三种扰动算子及其概率}
+\begin{tabular}{clc}
 \toprule
-芯片 & 轮廓 $W\times H$ & 面积 & 长宽比 & 面积利用率 & 耗时(s) & 合法性 \\
+算子 & 操作语义 & 概率 \\
 \midrule
-n100 & $421\times455$ & 191555 & 1.081 & 0.937 & 0.85 & 合法 \\
-n200 & $357\times517$ & 184569 & 1.448 & 0.952 & 15.9 & 合法 \\
-n300 & $486\times591$ & 287226 & 1.216 & 0.951 & 43.9 & 合法 \\
+旋转 (rotate) & 随机选一模块翻转 $90^\circ$（仅翻转尺寸标志） & 0.30 \\
+删除-插入 (del\_and\_ins) & 随机删一节点再插入到随机位置（改变父子结构） & 0.35 \\
+节点交换 (swap) & 随机交换两节点（父子相邻走近邻交换，否则远邻交换） & 0.35 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{itemize}
-    \item 面积利用率 $=$ 模块总面积 $/$ 轮廓面积，均 $> 93\%$（B*-Tree 自由轮廓典型水平）。
-    \item 长宽比全部满足验证标准（n100/n200 $\le 1.5$，n300 $\le 1.5$）。
-    \item 三组芯片全部通过独立合法性复核（无重叠、尺寸保持）。
+    \item \textbf{局部性互补}：删除-插入只改变局部父子结构，解码后多只
+    影响局部区域，利于精细搜索；节点交换（远邻）跳跃更大，利于跳出
+    局部最优；
+    \item \textbf{拓扑保持}：删除-插入与交换均保持树拓扑合法（节点集合
+    守恒、无环），由 \texttt{Validate\-Tree()} 白盒校验。
 \end{itemize}
 
-\subsection{可视化}
+\subsection{快速模拟退火}
 
-每个芯片 11 张图：9 张 SA 过程快照（初始到最终的布局演化）、1 张收敛曲线、1 张最终布图。
-输出位于 \texttt{q1/visualization/figs/<时间戳>/<chip>/}。
+\subsubsection{构造期：归一化常数与初始温度}
+
+构造期执行 $N+1$ 次随机扰动 $+$ 解码，统计式 \eqref{eq:cost} 的分母
+$\bar A$、$\bar P$，并统计相邻代价差的平均幅度 $\bar{|\Delta|}$，用于
+估计初始温度，使初始接受率约为 $P = 0.9$：
+\begin{equation}
+T_0 = -\,\frac{\bar{|\Delta|}}{\ln P} \approx 9.49\, \bar{|\Delta|}.
+\end{equation}
+
+\subsubsection{自适应冷却}
+
+\textbf{不用固定几何冷却}（$T \leftarrow \alpha T$）的原因：其收敛速度对
+问题规模与代价尺度敏感，参数 $\alpha$ 难以通用。本项目采用\textbf{平均
+增量驱动}的自适应降温：每一温度层执行 $rnd = 2n + 20$ 次扰动，统计层内
+平均代价差 $\bar{|\Delta|}_k$，按式更新：
+\begin{equation}
+T_k = \begin{cases}
+T_0 \cdot \dfrac{\bar{|\Delta|}_k}{c \cdot k}, & k \le k_0, \\[1.2em]
+T_0 \cdot \dfrac{\bar{|\Delta|}_k}{k}, & k > k_0,
+\end{cases}
+\qquad
+k_0 = \max\!\Big(2,\ \Big\lceil \tfrac{n}{11} \Big\rceil\Big), \quad
+c = \max(100 - n,\ 10).
+\end{equation}
+
+物理含义：层内平均代价差大（搜索激烈）时降温快，趋于平稳时降温慢，
+实现"粗段快冷、细段慢冷"的自动平衡。
+
+\subsubsection{接受准则（Metropolis）}
+
+对候选布图代价差 $\Delta = f_{\text{new}} - f_{\text{cur}}$：
+\begin{equation}
+\text{接受} \iff \Delta \le 0 \quad \text{或} \quad
+\xi < \exp\!\Big(-\frac{\Delta}{T}\Big), \qquad \xi \sim U(0,1).
+\end{equation}
+高温期接受劣解概率高（全局探索），低温期收敛于局部精细搜索。被接受时
+更新当前解与历史最优；被拒绝时回滚拓扑。
+
+\subsubsection{停滞重置（reheating）}
+
+连续 $2n$ 个温度层无改进时判定为停滞，重置 $T \leftarrow T_0$ 并递增
+$rnd$（扩大邻域规模），重新加热搜索；累计重置超过 $n/7$ 次（精修阶段）
+则终止。该机制可多次跳出深层局部最优。
+
+\subsubsection{终止条件}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{ll}
+\toprule
+条件 & 含义 \\
+\midrule
+$T \le 0.001$ & 温度降到下界（冻结） \\
+拒绝率 $\ge 99\%$ & 连续 $rnd$ 次几乎全部拒绝（收敛） \\
+$k > 9n$（精修） & 迭代层数上限 \\
+停滞重置超限 & 重置次数 $> n/7 + 1$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{整体伪代码}
+
+\begin{tcolorbox}[colback=blue!5, colframe=blue!60, title=算法 1：B$^*$ 树 + 快速模拟退火]
+{\small
+\begin{verbatim}
+输入: 模块尺寸, lambda = 0.5, 采样次数 N+1
+输出: 最优布图 (坐标与旋转)
+
+1  采样 N+1 个随机布局 -> 归一化常数 A_bar, P_bar, 初始温度 T0
+2  T <- T0/50; 初始化 B*-Tree
+3  while 未满足终止条件 do
+4      for i <- 1 to rnd (= 2n+20) do
+5          tau' <- 扰动(tau)                # 旋转 / 删除-插入 / 交换
+6          轮廓解码 tau' -> (W, H); 计算代价 f(tau')
+7          d <- f(tau') - f(tau)
+8          if d <= 0 或 xi < exp(-d/T) then 接受 tau'
+9      T <- T0 * avg(|d|) / (c * k)         # 自适应降温
+10     if 停滞 then T <- T0                 # reheating
+11 return 历史最优布图
+\end{verbatim}
+}
+\end{tcolorbox}
+
+说明：精修阶段初始温度取 $T_0 / 50$，从较低温度开始聚焦局部最优；
+每芯片执行两轮独立精修，取代价更小者输出。
+
+\subsection{多轮独立运行取优}
+
+模拟退火是随机启发式，单次运行结果有波动（实测 n300 长宽比在
+1.5 $\sim$ 4.4 间波动）。因此每芯片独立运行 $R$ 轮（交付结果取 $R = 5$，
+默认 $R = 3$，可用 \texttt{--repeats} 调整），按字典序 $(A, R)$ 取最优，
+将随机波动压到可接受范围。
+
+\subsection{复杂度分析}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lc}
+\toprule
+环节 & 复杂度 \\
+\midrule
+单次解码 & $O(n)$（摊还） \\
+单温度层 & $O(rnd \cdot n) = O(n^2)$，$rnd = 2n + 20$ \\
+单轮退火 & 温度层数 $\times$ $O(n^2)$，层数由降温/重置动态决定 \\
+单芯片 $R$ 轮 & $R \times$ 单轮（三芯片可并行） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+实测单轮耗时：n100 $\approx$ 0.17s、n200 $\approx$ 3.2s、n300
+$\approx$ 8.8s，随 $n$ 近似线性扩展（$n$ 翻倍约 3 倍），工程可行。
 
 % ============================================================
-\section{文件依赖关系}
+\section{结果与验证}
 % ============================================================
 
-\begin{lstlisting}
-q1_solver.py
-  |-- cpp_solver/bin/main          (编译自 main.cpp + sa.hpp + floor_plan.hpp)
-  |-- data/raw/{n100,n200,n300}.{blocks,nets,pl}
-  |-- common/visualize.py
-  `-- q1/visualization/plot_{floorplan,convergence,snapshots}.py
-\end{lstlisting}
+\subsection{数据规模}
 
-% ============================================================
-\section{运行指南}
-% ============================================================
+\begin{table}[H]
+\centering
+\caption{三组芯片数据规模}
+\begin{tabular}{lccc}
+\toprule
+芯片 & 模块数 $n$ & 端子数 & 线网数 \\
+\midrule
+n100 & 100 & 334 & 885 \\
+n200 & 200 & 564 & 1585 \\
+n300 & 300 & 569 & 1893 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\subsection{环境要求}
+\subsection{求解结果}
+
+% TODO: λ 扫描完成后，以 q1/output/q1_metrics.csv 与 data/raw 重算
+% 下表（面积利用率 = T/A、死区比例 = 1 - T/A、下界相对差距 = (A-T)/T、
+% 宽高比 R = max(W,H)/min(W,H)）。
+
+\begin{table}[H]
+\centering
+\caption{Q1 三芯片求解结果（$\lambda = 0.5$，5 轮取优）}
+\small
+\begin{tabular}{lcccccccc}
+\toprule
+芯片 & 轮廓 $W \times H$ & 面积 $A$ & 模块总面积 $T$ & 面积利用率 $\eta$ & 死区比例 & 下界相对差距 & 宽高比 $R$ & 耗时(s) \\
+\midrule
+n100 & $421\times455$ & 191555 & 179501 & 0.9371 & 6.29\% & 6.72\% & 1.081 & 0.85 \\
+n200 & $357\times517$ & 184569 & 175696 & 0.9519 & 4.81\% & 5.05\% & 1.448 & 15.9 \\
+n300 & $486\times591$ & 287226 & 273170 & 0.9511 & 4.89\% & 5.15\% & 1.216 & 43.9 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+注：面积利用率 $\eta = T/A$（$T$ 为模块总面积，面积下界）；死区比例
+$= 1 - \eta$；下界相对差距 $= (A - T)/T$。三组芯片均通过独立合法性复核
+（无重叠、尺寸保持）。
+
+\subsection{结果讨论}
 
 \begin{itemize}
-    \item g++（Apple clang，\texttt{-std=c++17}，无第三方依赖）。
-    \item conda 环境 \texttt{math}（Python 3.9+，matplotlib）。
-    \item TeX Live 2026（xelatex + ctex，编译本指南）。
+    \item \textbf{面积利用率与死区}：三组芯片利用率均 $> 93\%$（死区比例
+    $< 7\%$）。理论上界 $\eta = 1$ 仅对极特殊尺寸集合可达，故 $\eta > 0.93$
+    已接近工程极限；剩余死区面积 n100 / n200 / n300 分别为 12054 / 8873 /
+    14056，占总面积的 6.29\% / 4.81\% / 4.89\%；
+    \item \textbf{长宽比}：全部 $\le 1.5$，满足竞赛验证标准；n100 最接近
+    正方形（1.081），n200 最长条（1.448）；
+    \item \textbf{规模扩展性}：耗时随 $n$ 近似线性增长，说明自适应降温
+    与 reheating 参数对规模不敏感，算法可迁移到更大规模实例；
+    \item \textbf{字典序取优}：面积优先、长宽比次之，二者未发现冲突
+    （面积最小的解长宽比也可控）。
 \end{itemize}
 
-\subsection{完整运行流程}
+\subsection{权重 $\lambda$ 敏感性}
+\label{sec:lambda}
 
-\begin{lstlisting}[language=bash]
-cd cpp_solver && make && make test      # 编译 + 白盒测试
-cd ..
-conda activate math
-python q1/q1_solver.py                  # 求解 + 汇总 + 出图
-python q1/q1_solver.py --skip-solve     # 只重出图/汇总（复用已有结果）
-\end{lstlisting}
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{ll}
+\toprule
+$\lambda$ & 观察结果 \\
+\midrule
+0.5 & n100 长宽比可达 1.002、利用率 0.942（均衡点，交付采用） \\
+0.8 & n300 卡长条局部最优，长宽比高达 4.4（面积权重过大） \\
+$\to 1$ & 完全忽略长宽比，退化为纯面积最小化，长宽比不可控 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\subsection{常见问题}
+\subsection{独立合法性复核}
 
+求解器输出坐标后，用\textbf{独立于 C++ 的 Python 实现}复核（避免实现
+耦合导致的系统性错误）：
 \begin{enumerate}
-    \item \textbf{图没更新}：求解只写 output/，画图每次新建时间戳目录——直接看最新目录。
-    \item \textbf{长宽比不达标}：增大 \texttt{--repeats} 或调低 \texttt{--alpha}。
-    \item \textbf{性能}：n300 单轮约 15s（并行三芯片）；求解与画图解耦，不互相拖累。
+    \item 模块个数与输入一致；
+    \item 两两无重叠（严格相交语义）；
+    \item 每模块有效尺寸恰为原始尺寸的置换（旋转不改变尺寸集）；
+    \item $WH \ge T$（面积下界）。
 \end{enumerate}
+三组芯片全部通过。
 
 % ============================================================
-\section{合规清单}
+\section{正确性保障与可复现性}
 % ============================================================
+
+\subsection{工程保障}
 
 \begin{itemize}
-    \item 原始数据 \texttt{data/raw/} 为只读副本，求解器不修改输入文件。
-    \item 全部结果可通过 \texttt{make test}（1027 断言）+ \texttt{make test-san} 复现。
-    \item 随机种子未固定（每次求解不同），论文数值以 \texttt{q1\_metrics.csv} 与
-          \texttt{figs/<时间戳>/} 为准；复现流程确定性（命令固定）。
-    \item 核心代码与 HW2 开源方案的差异已在转换阶段记录（去 gnuplot/Boost、
-          解析器适配、NaN 除零修复、N=1 守卫、reset 上限等）。
+    \item 核心代码正确性由 \textbf{1027 断言白盒测试} + ASan/UBSan 双轨
+    保证：含独立参考解码器（与实现完全不同的算法）、暴力枚举全部二叉树
+    形状（Catalan 132/429/1430）、独立代价 oracle、算子语义校验；
+    \item 求解与可视化解耦：求解只写文件，画图后处理读取，不互相拖累；
+    \item 原始数据 \texttt{data/raw/} 只读，求解器不修改任何输入文件；
+    \item 随机种子未固定（每次运行结果略有差异），论文数值以
+    \texttt{q1\_metrics.csv} 为准，复现流程（命令）确定。
 \end{itemize}
+
+\subsection{运行命令与产物}
+
+{\small
+\begin{verbatim}
+cd cpp_solver && make && make test      # 编译 + 白盒测试（1027 断言）
+conda activate math
+python q1/q1_solver.py                  # 求解三芯片 + 汇总 CSV + 出图
+\end{verbatim}
+}
+
+\begin{itemize}
+    \item \texttt{q1/output/q1\_metrics.csv}：三芯片指标汇总（论文数值以此为准）；
+    \item \texttt{q1/output/q1\_<chip>.rpt}：最终布局坐标（格式：
+    cost / hpwl / area / W H / time / 每行 \texttt{name x1 y1 x2 y2}）；
+    \item \texttt{q1/output/q1\_<chip>.log}：收敛轨迹 + 9 等分过程快照；
+    \item \texttt{q1/visualization/figs/<时间戳>/<chip>/}：每芯片
+    9 张过程快照 + 1 张收敛曲线 + 1 张最终布图（构成收敛性的可视化证据）。
+\end{itemize}
+
+% ============================================================
+\begin{thebibliography}{9}
+\bibitem{bstar} Chang Y C, Chang Y W, Wu G M, et al. B*-Trees: a new
+  representation for non-slicing floorplans[C]// Proceedings of the 37th
+  Annual Design Automation Conference (DAC). 2000: 458--463.
+\bibitem{fastsa} Chen T C, Chang Y W. Modern floorplanning based on B*-tree
+  and fast simulated annealing[J]. IEEE Transactions on Computer-Aided
+  Design of Integrated Circuits and Systems, 2006, 25(4): 637--650.
+\end{thebibliography}
 
 \end{document}

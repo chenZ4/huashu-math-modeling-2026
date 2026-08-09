@@ -1,2 +1,2 @@
 chip,question,lambda,t2_div,dead,side,repeats,seed_base,area,aspect,util
-n100,q1,0.6,50,0.15,0,8,20260808,189198,1.1039,0.9487
+n200,q1,0.6,50,0.15,0,16,20260808,183560,1.4731,0.9572

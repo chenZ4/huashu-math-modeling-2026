@@ -3,33 +3,15 @@
 \usepackage{amsmath, amssymb}
 \usepackage{geometry}
 \usepackage{booktabs}
-\usepackage{listings}
-\usepackage{xcolor}
-\usepackage{tcolorbox}
 \usepackage{enumitem}
-\usepackage{hyperref}
+\usepackage{tcolorbox}
 \usepackage{float}
-\usepackage{tikz}
-\usetikzlibrary{arrows.meta, positioning}
+\usepackage{hyperref}
 
 \geometry{left=2.5cm, right=2.5cm, top=2.5cm, bottom=2.5cm}
 
-\lstset{
-    language=Python,
-    basicstyle=\ttfamily\small,
-    keywordstyle=\color{blue}\bfseries,
-    commentstyle=\color{gray},
-    stringstyle=\color{red},
-    showstringspaces=false,
-    breaklines=true,
-    frame=single,
-    numbers=left,
-    numberstyle=\tiny\color{gray},
-    tabsize=4,
-}
-
-\title{\textbf{Q4 代码架构与运行逻辑完全指南}\\[6pt]
-\large VLSI 布图规划设计 --- L/T 型模块模型修正与强算最优验证}
+\title{\textbf{问题四 模型建立与求解（论文手工作稿）}\\[6pt]
+\large VLSI 布图规划设计 --- L/T 型模块的最小包围盒（穷举 + 最优性证明）}
 \author{2026 年第七届"华数杯"大学生数学建模竞赛 B 题}
 \date{2026/08}
 
@@ -39,297 +21,273 @@
 \newpage
 
 % ============================================================
-\section{项目总体架构}
+\section{问题重述与模型建立}
 % ============================================================
 
-\subsection{目录结构}
+\subsection{问题重述}
 
-\begin{lstlisting}[language=bash]
-The_7th_Huashu_Cup.../
-|-- cpp_solver/                  # C++ 共享核心（Q1/Q2/Q3，本问不依赖）
-|-- common/                      # 共享基础库（verify 等，方法论复用）
-|-- q4/                          # 问题 4 独立模型与求解器（<-- 本文件）
-|   |-- q4_solver.py             # 超块 B*-Tree 强算穷举器
-|   |-- output/
-|   |   `-- q4_result.csv        # 最优布局：模块/旋转角/坐标/验证记录
-|   `-- visualization/
-|       |-- plot_q4.py           # 最优摆放示意图（形状/旋转角/尺寸标注）
-|       `-- figs/
-|           |-- q4_optimal.png   # 最优摆放图
-|           `-- <时间戳>/        # 每次运行新建时间戳目录（保留历史）
-`-- paper/                       # 论文写作
-\end{lstlisting}
+\subsubsection*{背景与意义}
 
-\subsection{执行顺序}
+在实际芯片设计中，模块并非全部为矩形：电源域、模拟宏单元、异形 IP 常呈
+L 型、T 型等多边形形状。这类模块无法直接用"宽 × 高"描述，但可视为
+\textbf{若干矩形按固定相对位置拼接}而成。问题 4 在问题 1 的矩形布图模型
+基础上引入 L/T 型模块与四向旋转，检验"矩形分解 + B$^*$ 树"框架对
+\textbf{非矩形模块}的推广能力，是模型修正与算法延续性的验证题。
 
-\begin{tcolorbox}[colback=blue!5, colframe=blue!60, title=执行顺序]
+\subsubsection*{题目重述}
+
+问题 4 要求：给定 4 个模块——T 型（b1）、L 型（b2）与两个矩形
+（b3 $2\times1$、b4 $1\times4$）——每个模块可进行
+$0^\circ / 90^\circ / 180^\circ / 270^\circ$ 四种旋转，求无重叠布图使
+\textbf{包围盒面积最小}，并给出最优摆放与旋转角。
+
+\subsubsection*{模块几何（矩形分解）}
+
+L/T 型模块表示为\textbf{固定相对位置的矩形并集} $M = \bigcup_{k} R_k$：
+\begin{table}[H]
+\centering
+\caption{模块定义（矩形分解，总面积 24）}\label{tab:mod}
+\small
+\begin{tabular}{clcl}
+\toprule
+模块 & 形状 & 分解矩形（相对坐标） & 面积 \\
+\midrule
+b1 & T 型 & 顶横条 $4\times2$ @(0,2)；竖干 $2\times2$ @(1,0) & 12 \\
+b2 & L 型 & 左竖条 $1\times4$ @(0,0)；右下横条 $1\times2$ @(1,0) & 6 \\
+b3 & 矩形 & $2\times1$ & 2 \\
+b4 & 矩形 & $1\times4$ & 4 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+例如 b1（T 型）为 $4\times2$ 顶横条与居中 $2\times2$ 竖干的并集：
+外接 bbox 为 $4\times4$，但实际面积仅 12（存在 $4\times4$ 的凹角空缺）。
+b2（L 型）外接 bbox 为 $2\times4$，实际面积 6。四个模块总面积
+$\Sigma A = 24$。
+
+\subsubsection*{数学形式化}
+
+每个模块经四向旋转（$90^\circ$ 倍角，角点变换 $(x,y) \mapsto (-y,x)$
+后归一化平移）后共有 4 种朝向；模块整体作为\textbf{超块}（内部矩形相对
+位置固定）参与布局。设包围盒宽高为 $(W, H)$，问题形式化为
+\begin{equation}
+\min W \times H, \qquad \text{s.t. 全部超块互不重叠（矩形级）、无越界}.
+\end{equation}
+
+\textbf{面积下界}：任意合法布局的包围盒面积 $\ge$ 模块总面积，
+\begin{equation}
+WH \ge \Sigma A = 24,
+\end{equation}
+该下界可判优：若找到面积恰为 24 的合法布局，即为全局最优。
+
+\subsubsection*{目标与问题性质}
+
+目标：$\min WH$（包围盒面积）；约束：矩形级无重叠。本问与问题 1 的
+关系是\textbf{模型修正而非重新建模}——仅表示粒度（矩形 → 超块）与
+解码支撑（凹角精确支撑）发生改变，目标函数与搜索框架不变。由于实例
+仅 4 模块，拓扑空间极小：14 树形 $\times$ 24 排列 $\times$ 256 旋转
+$= 86\,016$ 组合，可\textbf{穷举全部组合}并配合面积下界严格\textbf{证明
+全局最优}——结果确定，不依赖任何搜索运气（这与问题 1--3 的启发式
+求解形成方法上的对照）。
+
+\subsection{问题分析}
+
+问题 4 是问题 1 模型的\textbf{模型修正 + 算法延续}验证：
+
 \begin{enumerate}
-    \item \texttt{conda activate math}
-    \item \texttt{python q4/q4\_solver.py}（强算穷举 + 三层验证，秒级）
-    \item \texttt{python q4/visualization/plot\_q4.py}（最优摆放示意图）
+    \item \textbf{两处变化}：模块不再全为矩形（出现 L/T 型）；
+    旋转扩展为四向（$90^\circ$ 倍角）；
+    \item \textbf{延续性}：非矩形模块经\textbf{矩形分解}后，B$^*$ 树表示
+    框架与轮廓解码框架不变，仅节点语义与解码支撑扩展——满足题目
+    "在问题 1 算法基础上适当修改，不要求重新设计新的优化算法"；
+    \item \textbf{规模决定方法}：实例仅 4 模块，拓扑空间极小
+    （14 树形 $\times$ 24 排列 $\times$ 256 旋转 $= 86\,016$ 组合），
+    直接\textbf{穷举全部组合}并配合面积下界\textbf{证明全局最优}，
+    不依赖搜索运气。
+\end{enumerate}
+
+\subsection{模型修正}
+
+\subsubsection{修正一：模块表示 --- 矩形分解}
+
+L/T 型模块可表示为\textbf{固定相对位置的矩形并集}：
+\begin{equation}
+M = \bigcup_{i=1}^{k} R_i, \qquad
+R_i = (x_i, y_i, w_i, h_i) \text{ 相对坐标固定}.
+\end{equation}
+
+例如 T 型（b1）：顶横条 $4\times2$ 与居中竖干 $2\times2$
+（bbox $4\times4$，面积 12）；L 型（b2）：左竖条 $1\times4$ 与
+右下横条 $1\times2$（bbox $2\times4$，面积 6）。
+
+\subsubsection{修正二：节点语义 --- 矩形升级为超块}
+
+B$^*$ 树节点从"单个矩形"升级为"\textbf{超块}"（矩形组，内部相对位置
+固定、整体移动与旋转）。树的父子/左右子关系语义\textbf{不变}。
+
+\subsubsection{修正三：解码 --- 凹角精确支撑}
+
+超块放置时，其 $y$ 坐标由内部各矩形分别对轮廓求支撑、取最大值：
+\begin{equation}
+\label{eq:support}
+y_{\text{block}} = \max_{i} \big( \text{support}(R_i) - y_i \big),
+\end{equation}
+其中 $\text{support}(R_i)$ 为 $R_i$ 的 $x$ 区间与已放置矩形相交的
+最高顶。该式使 \textbf{L/T 凹角空间被充分利用}（对比"按 bbox 放置"
+浪费凹角），是无重叠前提下更紧凑的解码。
+
+\subsubsection{修正四：旋转 --- 四向}
+
+$0^\circ/90^\circ/180^\circ/270^\circ$ = 分解矩形组的整体旋转：对组内
+所有矩形做角点变换 $(x, y) \mapsto (-y, x)$ 并归一化平移，\textbf{预计算
+4 组坐标}供穷举使用。
+
+\subsection{目标与约束}
+
+与问题 1 完全一致：目标为\textbf{包围盒面积最小}，约束为\textbf{模块
+（矩形级）互不重叠}。修正仅发生在\textbf{表示粒度}与\textbf{解码支撑}，
+目标函数与搜索框架未变——这是"模型修正而非重新建模"的关键论证。
+
+% ============================================================
+\section{求解算法设计}
+% ============================================================
+
+\subsection{总体框架}
+
+\begin{tcolorbox}[colback=blue!5, colframe=blue!60, title=算法流程]
+\begin{enumerate}
+    \item 预计算 4 个模块的四向旋转分解坐标（角点变换 + 归一化）；
+    \item 穷举 B$^*$ 树拓扑：14 树形 $\times$ 24 标签排列；
+    \item 每拓扑下穷举 $4^4 = 256$ 旋转组合；
+    \item 超块解码（凹角精确支撑）$\rightarrow$ 矩形级重叠检查
+    $\rightarrow$ 更新最小面积 best；
+    \item 对照：按超块 bbox 放置的\textbf{必合法版本}求最小值。
 \end{enumerate}
 \end{tcolorbox}
 
-\subsection{核心设计理念}
-
-问题 4 是问题 1 模型的\textbf{模型修正 + 算法延续}验证：非矩形模块经矩形分解后，
-B*-Tree 表示框架与轮廓解码框架不变，仅节点语义与解码支撑扩展；
-由于实例规模极小（4 模块），在修正模型上\textbf{穷举全部 B*-Tree 拓扑空间}
-并证明全局最优（面积达到理论下界）。
-
-% ============================================================
-\section{问题 1 模型回顾与问题 4 模型修正讨论}
-% ============================================================
-
-\subsection{问题 1 模型基线}
-
-\begin{itemize}
-    \item \textbf{表示}：B*-Tree 二叉树（节点 = 矩形模块；左子 = 父右邻、
-          右子 = 父上方），任意合法布局可编码（完备性）。
-    \item \textbf{解码}：DFS 前序 + 水平轮廓线定位，$y$ = 与 $x$ 区间相交的
-          最高支撑顶，天然无重叠。
-    \item \textbf{目标}：芯片轮廓面积最小（长宽比次目标）；约束：无重叠、
-          模块 90° 旋转。
-    \item \textbf{搜索}：模拟退火（三种扰动算子：旋转 / 删除-插入 / 交换）。
-\end{itemize}
-
-\subsection{问题 4 的两处变化}
-
-\begin{enumerate}
-    \item 模块不再全是矩形：出现 \textbf{L 型、T 型} 模块。
-    \item 旋转扩展：所有模块可进行 \textbf{90°/180°/270°} 旋转。
-\end{enumerate}
-
-\subsection{模型修正（四条）}
-
-\textbf{修正一：模块表示 --- 矩形分解}
-
-L/T 型模块可表示为\textbf{固定相对位置的矩形并集}：
+\subsection{穷举空间}
 
 \begin{equation}
-M = \bigcup_{i=1}^{k} R_i, \qquad
-R_i = \{(x_i, y_i, w_i, h_i)\} \text{ 相对坐标固定}
+14 \;(\text{树形}) \times 24 \;(\text{排列}) \times 256 \;(\text{旋转})
+= 86\,016 \text{ 组合}.
 \end{equation}
-
-例如图 3 的 T 型（b1）：顶横条 $4\times2$ 与居中竖干 $2\times2$
-（bbox $4\times4$，面积 12）；L 型（b2）：左竖条 $1\times4$ 与右下横条
-$1\times2$（bbox $2\times4$，面积 6）。
-
-\textbf{修正二：节点语义 --- 矩形升级为超块}
-
-B*-Tree 节点从"单个矩形"升级为"\textbf{超块}"（矩形组，内部相对位置固定、
-整体移动与旋转）。树的父子/左右子关系语义\textbf{不变}。
-
-\textbf{修正三：解码 --- 凹角精确支撑}
-
-超块放置时，其 $y$ 坐标由内部各矩形分别对轮廓求支撑，取最大值：
-
-\begin{equation}
-y_{\text{block}} = \max_{i} \left( \text{support}(R_i) - y_i \right)
-\end{equation}
-
-其中 $\text{support}(R_i)$ 为 $R_i$ 的 $x$ 区间与已放置矩形相交的最高顶。
-该式使 \textbf{L/T 凹角空间被充分利用}（对比"按 bbox 放置"浪费凹角），
-是无重叠前提下更紧凑的解码。
-
-\textbf{修正四：旋转 --- 四向}
-
-0°/90°/180°/270° = 分解矩形组的整体旋转：对组内所有矩形做角点变换
-$(x,y)\mapsto(-y,x)$ 并归一化平移，\textbf{预计算 4 组坐标}供枚举。
-
-\subsection{目标与约束保持不变}
-
-目标（包围盒面积最小）与约束（无重叠）与问题 1 完全一致——这是
-"模型修正而非重新建模"的关键论证：修正仅发生在\textbf{表示粒度}与
-\textbf{解码支撑}，目标函数与搜索框架未变。
-
-\subsection{算法修正与延续性}
 
 \begin{itemize}
-    \item 搜索框架不变：仍为 B*-Tree 拓扑空间上的搜索。
-    \item \textbf{4 模块实例}：拓扑空间极小（树形 Catalan(4)=14 $\times$
-          标签排列 $4!$ $\times$ 旋转 $4^4$ $=$ 86\,016 组合），
-          直接\textbf{穷举}，配合面积下界可\textbf{证明全局最优}。
-    \item \textbf{大规模实例}：沿用问题 1 的模拟退火流程，仅将解码替换为
-          超块版本——满足题目"在问题 1 算法基础上适当修改，不要求重新设计
-          新的优化算法"。
+    \item 树形：$C_4 = 14$ 种有序二叉树形状（递归生成全部相对索引组合）；
+    \item 排列：4 模块分配到树节点，$4! = 24$；
+    \item 旋转：每模块 4 向，$4^4 = 256$。
+\end{itemize}
+
+\subsection{解码与合法性检查}
+
+\begin{itemize}
+    \item 超块解码：$x$ 由树关系确定（左子紧贴父右、右子与父左对齐），
+    $y$ 按式 \eqref{eq:support} 凹角精确支撑；
+    \item \textbf{矩形级重叠检查}：全部 86\,016 布局逐对验证
+    6 个分解矩形两两无重叠（不信任解码，独立检查）；
+    \item 剪枝与断言：$best\_area \ge \Sigma A = 24$（下界恒成立）、
+    $best\_area \le bbox\_version$（精确版不劣于 bbox 版）。
 \end{itemize}
 
 % ============================================================
-\section{强算求解流程}
+\section{最优性证明与结果}
 % ============================================================
 
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[
-  node distance=1.0cm,
-  box/.style={draw, rounded corners=2pt, fill=blue!8, align=center,
-              text width=7.2cm, minimum height=0.9cm},
-  term/.style={draw, rounded corners=8pt, fill=green!12, align=center,
-               text width=7.2cm, minimum height=0.9cm},
-  arrow/.style={-{Stealth[length=3mm]}, thick},
-]
-\node[term] (in) {输入：4 模块尺寸（矩形分解描述）};
-\node[box, below=of in] (rot) {预计算四向旋转分解坐标（0/90/180/270°）};
-\node[box, below=of rot] (tree) {枚举 B*-Tree 拓扑：14 树形 $\times$ 24 排列};
-\node[box, below=of tree] (place) {超块解码：x 由树关系定，y = 凹角精确支撑};
-\node[box, below=of place] (check) {矩形级重叠检查（6 矩形两两）};
-\node[box, below=of check] (best) {更新最小面积 best（256 旋转组合 $\times$ 上述）};
-\node[term, below=of best] (out) {输出：最小面积 + 布局坐标 + 旋转角};
-\draw[arrow] (in) -- (rot);
-\draw[arrow] (rot) -- (tree);
-\draw[arrow] (tree) -- (place);
-\draw[arrow] (place) -- (check);
-\draw[arrow] (check) -- (best);
-\draw[arrow] (best) -- (out);
-\end{tikzpicture}
-\caption{Q4 超块 B*-Tree 强算穷举流程}
-\end{figure}
-
-% ============================================================
-\section{Phase：q4\_solver.py}
-% ============================================================
-
-\subsection{模块定义}
-
-\begin{lstlisting}[language=Python]
-MODULES = {
-    "b1": [(0, 2, 4, 2), (1, 0, 2, 2)],   # T 型：顶横条 4x2 + 竖干 2x2，面积 12
-    "b2": [(0, 0, 1, 4), (1, 0, 1, 2)],   # L 型：左竖条 1x4 + 右下横条 1x2，面积 6
-    "b3": [(0, 0, 2, 1)],                 # 矩形 2x1，面积 2
-    "b4": [(0, 0, 1, 4)],                 # 矩形 1x4，面积 4
-}
-TOTAL_AREA = 24
-\end{lstlisting}
-
-\subsection{关键实现}
-
-\begin{itemize}
-    \item \texttt{rotate\_90}：角点变换 + 归一化平移，四向预计算。
-    \item \texttt{gen\_shapes}：递归生成全部二叉树形状（相对索引组合）。
-    \item \texttt{place}：超块解码（x 树关系 + y 凹角精确支撑）+ 矩形级重叠检查。
-    \item \texttt{brute\_bbox\_version}：按超块 bbox 放置（必合法对照版）。
-    \item 剪枝与断言：$best\_area \ge TOTAL\_AREA$（下界）、
-          $best\_area \le bbox\_version$（精确版不劣于 bbox 版）。
-\end{itemize}
-
-% ============================================================
-\section{最优性证明}
-% ============================================================
+\subsection{最优性证明}
 
 \textbf{命题}：最小包围盒面积为 24，且为全局最优。
 
 \textbf{证明}：
 \begin{enumerate}
-    \item \textbf{下界}：任意合法布局的包围盒面积 $\ge$ 模块总面积 $= 24$
-          （4 模块互不重叠）。
-    \item \textbf{可达性}：强算穷举 86\,016 种组合，找到面积 $=24$ 的合法布局
-          （无重叠，矩形级验证）。
-    \item 由 1、2：$24 \le$ 最小面积 $\le 24$，故最小面积 $=24$，
-          \textbf{全局最优}（下界可达性证明）。
+    \item \textbf{下界}：任意合法布局的包围盒面积 $\ge$ 模块总面积
+    $= 24$（4 模块互不重叠，任何包围盒必须覆盖全部模块面积）；
+    \item \textbf{可达性}：穷举全部 86\,016 组合，找到面积 $= 24$ 的
+    合法布局（矩形级无重叠验证通过）；
+    \item 由 1、2：$24 \le$ 最小面积 $\le 24$，故最小面积 $= 24$，
+    \textbf{全局最优}（下界可达性证明）。
 \end{enumerate}
 
-该证明不依赖搜索运气：穷举覆盖全部 B*-Tree 拓扑（完备性），
-任何更优布局（面积 $<24$）将违反下界，故不存在。
-
-% ============================================================
-\section{实际运行结果}
-% ============================================================
+该证明\textbf{不依赖搜索运气}：穷举覆盖全部 B$^*$ 树拓扑（完备性），
+任何更优布局（面积 $< 24$）将违反下界，故不存在。
 
 \subsection{最优摆放}
 
 \begin{table}[H]
 \centering
+\caption{最优布局（包围盒 $4 \times 6 = 24$）}
+\small
 \begin{tabular}{lcccc}
 \toprule
 模块 & 旋转角 & 位置 $(x,y)$ & 分解矩形（绝对坐标） \\
 \midrule
-b3 & 0° & (0,0) & $2\times1$ @(0,0) \\
-b1 & 270° & (0,0) & 竖干 $2\times4$ @(2,0)；横条 $2\times2$ @(0,1) \\
-b2 & 270° & (0,3) & 横条 $4\times1$ @(0,4)；横条 $2\times1$ @(0,3) \\
-b4 & 90° & (0,5) & $4\times1$ @(0,5) \\
+b3 & $0^\circ$ & (0,0) & $2\times1$ @(0,0) \\
+b1 & $270^\circ$ & (0,0) & 竖干 $2\times4$ @(2,0)；横条 $2\times2$ @(0,1) \\
+b2 & $270^\circ$ & (0,3) & 横条 $4\times1$ @(0,4)；横条 $2\times1$ @(0,3) \\
+b4 & $90^\circ$ & (0,5) & $4\times1$ @(0,5) \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{itemize}
-    \item \textbf{最小包围盒}：$4\times6 = 24$（= 模块总面积下界，全局最优）。
-    \item b3（$2\times1$）恰好填入 b1（T 型 270°）的\textbf{凹角}，
-          体现凹角精确支撑的解码优势。
-    \item 对照：按超块 bbox 放置的最小面积为 32（$>24$），
-          证明精确支撑的有效性。
+    \item \textbf{最小包围盒}：$4\times6 = 24$（$=$ 模块总面积下界，
+    全局最优，完美铺满无死区）；
+    \item b3（$2\times1$）恰好填入 b1（T 型 $270^\circ$）的\textbf{凹角}，
+    体现凹角精确支撑的解码优势；
+    \item \textbf{对照}：按超块 bbox 放置的最小面积为 32（$>24$），
+    证明精确支撑语义的有效性（省 25\%）；
     \item 穷举 86\,016 组合全部通过矩形级重叠检查（合法率 100\%）。
 \end{itemize}
 
-\subsection{示意图}
-
-最优摆放示意图见 \texttt{q4/visualization/figs/q4\_optimal.png}
-（模块形状按分解矩形绘制，标注旋转角与包围盒）。
-
-% ============================================================
-\section{测试与验证}
-% ============================================================
+\subsection{结果讨论}
 
 \begin{itemize}
-    \item \textbf{矩形级重叠检查}：全部 86\,016 布局逐对验证 6 矩形无重叠
-          （不信任解码，独立检查）。
-    \item \textbf{面积下界断言}：$best\_area \ge 24$ 恒成立。
+    \item 达到理论下界（$= $ 模块总面积）意味着\textbf{零死区完美铺满}，
+    这是矩形打包问题的理想情形，本实例恰好可达；
+    \item 模型修正的有效性由 bbox 对照（32 vs 24）量化证明；
+    \item 大规模非矩形实例可沿用问题 1 的模拟退火流程，仅将解码替换
+    为超块版本（本问框架的直接推广）。
+\end{itemize}
+
+% ============================================================
+\section{正确性保障与可复现性}
+% ============================================================
+
+\subsection{工程保障}
+
+\begin{itemize}
+    \item \textbf{矩形级重叠检查}：全部 86\,016 布局逐对验证
+    6 矩形无重叠（不信任解码，独立检查）；
+    \item \textbf{面积下界断言}：$best\_area \ge 24$ 恒成立；
     \item \textbf{bbox 版对照}：精确版（24）$\le$ bbox 版（32），
-          防止支撑语义实现错误。
-    \item \textbf{旋转正确性}：四向坐标由角点变换推导，可手工复核。
+    防止支撑语义实现错误；
+    \item \textbf{旋转正确性}：四向坐标由角点变换推导，可手工复核；
+    \item 求解器为独立纯 Python 强算器（不依赖 C++ 核心），
+    秒级完成，结果完全确定。
 \end{itemize}
 
-% ============================================================
-\section{文件依赖关系}
-% ============================================================
+\subsection{运行命令与产物}
 
-\begin{lstlisting}
-q4_solver.py            # 独立强算器（不依赖 cpp_solver）
-  `-- q4/output/q4_result.csv
-plot_q4.py              # 读 q4_result.csv 出图
-  `-- q4/visualization/figs/
-\end{lstlisting}
-
-% ============================================================
-\section{运行指南}
-% ============================================================
-
-\subsection{环境要求}
-
-\begin{itemize}
-    \item conda 环境 \texttt{math}（Python 3.9+，matplotlib）。
-    \item 无第三方求解依赖（纯 Python 穷举）。
-\end{itemize}
-
-\subsection{完整运行流程}
-
-\begin{lstlisting}[language=bash]
+{\small
+\begin{verbatim}
 conda activate math
 python q4/q4_solver.py                    # 强算 + 验证（秒级）
 python q4/visualization/plot_q4.py \
     --csv q4/output/q4_result.csv \
     --out q4/visualization/figs/q4_optimal.png
-\end{lstlisting}
-
-\subsection{常见问题}
-
-\begin{enumerate}
-    \item \textbf{尺寸来源}：图 3 模块尺寸取自题目附图（b1 T 型 / b2 L 型 /
-          b3 2$\times$1 / b4 1$\times$4），总面积为 24。
-    \item \textbf{为什么是穷举而非 SA}：4 模块拓扑空间仅 86\,016 组合，
-          穷举即可证明全局最优；大规模实例沿用问题 1 的 SA。
-\end{enumerate}
-
-% ============================================================
-\section{合规清单}
-% ============================================================
+\end{verbatim}
+}
 
 \begin{itemize}
-    \item 未修改任何输入数据；尺寸取自题目附图。
-    \item 最优性由下界可达性严格证明（非启发式断言）。
-    \item 全部验证（重叠/下界/bbox 对照）自动化执行并可复现。
-    \item 论文表述建议：按第 2 节"模型修正讨论"组织
-          （表示修正 + 解码修正 + 算法延续 + 最优性证明）。
+    \item \texttt{q4/output/q4\_result.csv}：最优布局（min\_area 24、
+    下界 24、bbox 版 32、合法布局 86016）；
+    \item \texttt{q4/visualization/figs/q4\_optimal.png}：最优摆放示意图。
 \end{itemize}
+
+% ============================================================
+\begin{thebibliography}{9}
+\bibitem{bstar} Chang Y C, Chang Y W, Wu G M, et al. B*-Trees: a new
+  representation for non-slicing floorplans[C]// Proceedings of the 37th
+  Annual Design Automation Conference (DAC). 2000: 458--463.
+\end{thebibliography}
 
 \end{document}

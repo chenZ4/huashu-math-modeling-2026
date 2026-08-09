@@ -3,32 +3,14 @@
 \usepackage{amsmath, amssymb}
 \usepackage{geometry}
 \usepackage{booktabs}
-\usepackage{listings}
-\usepackage{xcolor}
-\usepackage{tcolorbox}
 \usepackage{enumitem}
-\usepackage{hyperref}
+\usepackage{tcolorbox}
 \usepackage{float}
-\usepackage{tikz}
-\usetikzlibrary{arrows.meta, positioning, shapes.geometric}
+\usepackage{hyperref}
 
 \geometry{left=2.5cm, right=2.5cm, top=2.5cm, bottom=2.5cm}
 
-\lstset{
-    language=C++,
-    basicstyle=\ttfamily\small,
-    keywordstyle=\color{blue}\bfseries,
-    commentstyle=\color{gray},
-    stringstyle=\color{red},
-    showstringspaces=false,
-    breaklines=true,
-    frame=single,
-    numbers=left,
-    numberstyle=\tiny\color{gray},
-    tabsize=4,
-}
-
-\title{\textbf{Q2 代码架构与运行逻辑完全指南}\\[6pt]
+\title{\textbf{问题二 模型建立与求解（论文手工作稿）}\\[6pt]
 \large VLSI 布图规划设计 --- 固定正方形轮廓下的 HPWL 最小化}
 \author{2026 年第七届"华数杯"大学生数学建模竞赛 B 题}
 \date{2026/08}
@@ -39,331 +21,403 @@
 \newpage
 
 % ============================================================
-\section{项目总体架构}
+\section{问题重述与模型建立}
 % ============================================================
 
-\subsection{目录结构}
+\subsection{问题重述}
 
-\begin{lstlisting}[language=bash]
-The_7th_Huashu_Cup.../
-|-- data/raw/                    # 原始附件副本 n100/n200/n300（只读）
-|-- cpp_solver/                  # C++ 共享核心（Q1/Q2/Q3 共用，单套测试）
-|   `-- src/
-|       |-- floor_plan.hpp       # B*-Tree 拓扑 + Skyline 解码 + 解析器
-|       |-- sa.hpp               # 快速模拟退火引擎（两阶段 + 收敛 log + 快照）
-|       |-- main.cpp             # CLI（mode/alpha/dead_ratio/--log/--seed）
-|       |-- test_main.cpp        # 白盒测试（1135 断言）
-|       `-- test_oracle.hpp      # 独立参考解码器 / 合法性校验 / 暴力枚举
-|-- common/
-|   |-- visualize.py             # 共享绘图基础（.rpt/.log/snap 解析）
-|   `-- verify.py                # 独立合法性复核（无重叠/尺寸/越界）
-|-- q2/                          # 问题 2 客制层（<-- 本文件）
-|   |-- q2_solver.py             # 多起点并行求解：调 bin/main，取 HPWL 最优
-|   |-- output/
-|   |   |-- q2_metrics.csv       # 指标汇总（side/HPWL/利用率/合法性/seed）
-|   |   |-- q2_n100.rpt          # 最优布局坐标
-|   |   `-- q2_n100.log          # 收敛轨迹 + 9 等分过程快照
-|   `-- visualization/
-|       |-- plot_floorplan.py    # 最终布图（轮廓框 + HPWL 标注）
-|       |-- plot_convergence.py  # 收敛曲线（run/run2 双阶段）
-|       |-- plot_snapshots.py    # 9 等分过程快照
-|       `-- figs/<时间戳>/<chip>/  # 每芯片 11 张图（保留全部历史）
-|-- q1/ q3/ q4/                  # 其余问题（共享核心 + 各自客制层）
-`-- paper/                       # 论文写作
-\end{lstlisting}
+\subsubsection*{背景与意义}
 
-\subsection{执行顺序}
+在集成电路物理设计中，布图规划（floorplanning）位于综合与布局布线之间：
+给定各功能模块的面积、形状与相互连接关系，先确定模块在芯片内的相对位置，
+为后续标准单元布局与全局布线提供几何框架。模块位置直接决定互连线长，
+而线长是时序、功耗与布线拥塞的主导因素：线长越短，信号延迟越低、功耗越小、
+布线可完成性越高。因此，\textbf{在轮廓给定的条件下最小化线长}是布图规划
+的核心目标之一，而半周长线长（HPWL）是线长最常用的一阶估计。
 
-\begin{tcolorbox}[colback=blue!5, colframe=blue!60, title=执行顺序]
+\subsubsection*{题目重述}
+
+问题 2 要求：在所有模块必须放入\textbf{固定正方形轮廓}（死区比例
+$d = 0.15$）的条件下，依据各芯片 \texttt{.blocks} 文件中的矩形模块尺寸
+与 \texttt{.nets}/\texttt{.pl} 文件中的\textbf{线网连接关系}，确定每个
+模块的摆放位置与朝向（允许 $90^\circ$ 旋转），使得\textbf{总半周长线长
+（HPWL）}最小。
+
+轮廓边长由题面公式确定：
+\begin{equation}
+\label{eq:side}
+\text{side} = \Big\lceil \sqrt{\Sigma A\,(1+d)} \Big\rceil, \qquad d = 0.15,
+\end{equation}
+其中 $\Sigma A = \sum_{i \in I} w_i h_i$ 为模块总面积；$\lceil\cdot\rceil$
+为上取整，保证轮廓面积不小于"模块总面积 + 死区面积"。三组芯片的轮廓边长
+分别为 side $= 455 / 450 / 561$（n100 / n200 / n300）。
+
+\subsubsection*{输入数据}
+
+每组芯片由三个文件描述，本问同时用到三者（模块几何、连接关系、端子位置）：
+
+\begin{itemize}
+    \item \texttt{.blocks}：模块列表。每行给出模块名与矩形四角坐标，如
+    \texttt{b0 block 4 (0,0) (0,33) (43,33) (43,0)}；头两行给出
+    \texttt{NumHardBlocks} 与 \texttt{NumTerminals}；
+    \item \texttt{.nets}：线网列表。每条线网给出引脚数及其包含的块/端子，
+    如 \texttt{NetDegree : 2 / p1 / b26}（引脚 \texttt{p1} 为端子，固定）；
+    \item \texttt{.pl}：端子坐标表（如 \texttt{p1 0 0}），端子位置固定、
+    不参与布图决策，仅参与 HPWL 计算。
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\caption{三组芯片数据规模}
+\begin{tabular}{lcccc}
+\toprule
+芯片 & 模块数 $n$ & 端子数 & 线网数 & 轮廓 side \\
+\midrule
+n100 & 100 & 334 & 885 & 455 \\
+n200 & 200 & 564 & 1585 & 450 \\
+n300 & 300 & 569 & 1893 & 561 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection*{数学形式化}
+
+设模块集合 $I = \{1, \dots, n\}$，模块 $i$ 原方向尺寸 $(w_i, h_i)$，
+旋转后有效尺寸 $(\tilde w_i, \tilde h_i)$。线网集合为 $E$，每条线网
+$e \in E$ 的引脚集合为块引脚与端子引脚的并集。块引脚取几何中心
+$p = (2x + \tilde w,\ 2y + \tilde h)$，端子引脚取 $p = (2x, 2y)$
+（整数运算，避免除 2 精度损失）。则总半周长线长定义为
+\begin{equation}
+H = \sum_{e \in E} \Big[
+\max_{p \in e} p_x - \min_{p \in e} p_x
++ \max_{p \in e} p_y - \min_{p \in e} p_y \Big].
+\end{equation}
+
+面积利用率 $\eta = \Sigma A / \text{side}^2$，由式 \eqref{eq:side} 可得
+\textbf{严格上界}：
+\begin{equation}
+\eta \le \frac{1}{1+d} = \frac{1}{1.15} = 0.8696,
+\end{equation}
+$\lceil \cdot \rceil$ 只会使 side 更大、上界更紧。实测三芯片利用率
+0.867$\sim$0.868 已逼近该极限（见结果节）。
+
+\subsubsection*{目标与问题性质}
+
+优化目标：$\min H$，约束为（i）\textbf{轮廓约束}：外接矩形不越界，
+$W \le \text{side}$ 且 $H \le \text{side}$；（ii）模块互不重叠、
+尺寸保持（由编码天然保证）。与问题 1（自由轮廓面积最小化）相比，
+本问轮廓固定、目标切换为布线代价，且 $d = 0.15$ 的轮廓\textbf{很紧}
+（死区仅 15\%）：可行解区域狭窄、搜索地形崎岖，单次启发式求解的
+方差极大（实测 n300 单轮 HPWL 在 574k$\sim$3152k 间波动）——
+这是后文采用\textbf{多起点独立退火}与\textbf{两阶段搜索}的直接动因。
+
+\subsection{问题分析}
+
+与问题 1（自由轮廓面积最小化）相比，本问有两处本质变化：
+
 \begin{enumerate}
-    \item \texttt{cd cpp\_solver \&\& make}（编译 \texttt{bin/main}，0 警告）
-    \item \texttt{make test}（可选，白盒测试回归，1135 断言）
-    \item \texttt{conda activate math}
-    \item \texttt{python q2/q2\_solver.py}（多起点并行求解 + 汇总 + 出图）
+    \item \textbf{轮廓固定}：面积不可优化，目标切换为布线代价 HPWL；
+    且 $d = 0.15$ 的轮廓很紧（面积利用率上界 $1/1.15 = 0.8696$），
+    可行解区域狭窄，搜索地形崎岖；
+    \item \textbf{线网引入}：模块间存在连接关系（引脚），HPWL 依赖
+    引脚几何中心位置，目标函数与模块相对位置强耦合。
+\end{enumerate}
+
+\textbf{多起点必要性}：紧轮廓下单次退火结果高度依赖随机种子（实测 n300
+单轮 HPWL 在 574k$\sim$3152k 间波动），故采取\textbf{多起点独立退火}：
+$N$ 个独立 SA 实例（不同种子）并行搜索、取 HPWL 最优——搜索结果单调不差于
+单实例，且天然可并行（进程级）。
+
+\textbf{两阶段策略}：先以"面积 + 长宽比 + 轮廓压力"的混合代价\textbf{找可行解}
+（把布局压进轮廓），再在可行解基础上\textbf{低温精修 HPWL}——固定轮廓下
+先保证合法性、再优化线长。
+
+\subsection{决策变量与派生量}
+
+与问题 1 相同，设模块集合 $I = \{1, \dots, n\}$，决策变量为：
+\begin{enumerate}
+    \item \textbf{拓扑变量}：B$^*$ 树 $\tau$（$n$ 个节点与模块一一对应）；
+    \item \textbf{朝向变量}：旋转标志 $r_i \in \{0,1\}$，有效尺寸
+    $(\tilde w_i, \tilde h_i)$ 由 $r_i$ 决定（旋转 $90^\circ$ 互换长宽）。
+\end{enumerate}
+
+坐标 $(x_i, y_i)$ 仍为\textbf{派生量}，由 $(\tau, r)$ 经轮廓压缩解码唯一确定
+（与问题 1 完全相同的 B$^*$ 树 + Skyline 解码）。本问多出的一类派生量是
+各模块\textbf{引脚坐标}：
+\[
+p_i = \begin{cases}
+(2x_i + \tilde w_i,\ 2y_i + \tilde h_i), & \text{块引脚（几何中心）},\\
+(2x_i,\ 2y_i), & \text{终端引脚（端子坐标）}.
+\end{cases}
+\]
+
+\subsection{目标函数}
+
+\subsubsection{HPWL（半周长线长）}
+
+对每条线网 $e$，取其所有引脚坐标的 $x$、$y$ 方向的极差之和：
+\begin{equation}
+\label{eq:hpwl}
+H = \sum_{e \in E} \Big[
+\max_{p \in e} p_x - \min_{p \in e} p_x
++ \max_{p \in e} p_y - \min_{p \in e} p_y \Big].
+\end{equation}
+
+\begin{itemize}
+    \item 引脚为线网内所有块引脚与终端引脚的并集（终端坐标固定，来自
+    \texttt{.pl}）；
+    \item 块引脚取几何中心 $2x + w$（整数运算，避免除 2 精度损失）；
+    \item HPWL 是布线长度的常用一阶估计，单调反映线长代价。
+\end{itemize}
+
+\subsubsection{两阶段代价函数}
+
+\textbf{可行性阶段（run）}——混合代价把布局压进轮廓：
+\begin{equation}
+c_{\text{norm}} = \alpha \frac{A}{\bar A}
++ \beta \frac{H}{\bar H}
++ (1 - \alpha - \beta) \frac{(r - R)^2}{\bar r},
+\end{equation}
+其中 $A = WH$ 为外接面积，$r = W/H$ 为长宽比，$R$ 为目标轮廓长宽比
+（正方形 $R = 1$），$\bar A, \bar H, \bar r$ 为构造期采样归一化常数；
+$\alpha$ 随可行性窗口\textbf{自适应滑动}，$\beta$ 在可行后递增施加轮廓压力
+（轮廓约束通过惩罚项引导，严格可行性由最终 bbox 检查保证）。
+
+\textbf{精修阶段（run2）}——纯线长代价：
+\begin{equation}
+c_{\text{true}} = \lambda \cdot WH + (1 - \lambda) \cdot \frac{H}{2},
+\qquad \lambda = 0.5.
+\end{equation}
+
+\subsection{约束条件}
+
+\begin{enumerate}
+    \item \textbf{轮廓约束}：外接矩形不越界，$W \le \text{side}$ 且
+    $H \le \text{side}$（正方形轮廓）；
+    \item \textbf{模块不重叠}、\textbf{尺寸保持}：由 B$^*$ 树解码天然保证
+    （同问题 1）；
+    \item \textbf{面积下界}：$\text{side}^2 \ge \Sigma A$，故面积利用率
+    \begin{equation}
+    \eta = \frac{\Sigma A}{\text{side}^2} \le \frac{1}{1+d} = 0.8696,
+    \end{equation}
+    $\lceil \cdot \rceil$ 只会使 side 更大，上界更紧——这是解质量的
+    无偏度量。
+\end{enumerate}
+
+% ============================================================
+\section{求解算法设计}
+% ============================================================
+
+\subsection{总体框架}
+
+\begin{tcolorbox}[colback=blue!5, colframe=blue!60, title=算法流程]
+\begin{enumerate}
+    \item 解析数据，按式 \eqref{eq:side} 计算轮廓边长 side；
+    \item 对每个随机种子独立执行\textbf{两阶段退火}：
+    \texttt{run()}（找可行解）$\rightarrow$ \texttt{run2()}（精修 HPWL）；
+    \item 只接受可行轮次（bbox $\le$ side），取 HPWL 最小者为该芯片最优；
+    \item 三芯片并行、每芯片内部多轮并行（峰值 9 进程）。
 \end{enumerate}
 \end{tcolorbox}
 
-\subsection{核心设计理念}
-
-\textbf{多起点独立退火（Multi-start SA）}：Q2 的 HPWL 目标在紧轮廓（死区 15\%）下搜索
-地形崎岖，单次退火结果依赖种子。采取 N 个独立 SA 实例（不同随机种子）并行搜索、
-取 HPWL 最优——这是优化领域标准做法，且天然可并行（进程级，M5 10 核吃满）。
-
-\textbf{两阶段退火}：\texttt{run()}（自适应 $\alpha$ + 轮廓压力找可行解）$\rightarrow$
-\texttt{run2()}（低温精修 HPWL）。固定轮廓下先确保合法性、再优化线长。
-
-\textbf{可复现性}：所有轮次以 \texttt{--seed} 显式注入随机种子（\texttt{seed\_base}
-记录于 CSV），结果可精确复现。
-
-% ============================================================
-\section{Q2 求解流程图}
-% ============================================================
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[
-  node distance=1.1cm,
-  box/.style={draw, rounded corners=2pt, fill=blue!8, align=center,
-              text width=7.2cm, minimum height=0.9cm},
-  dec/.style={draw, rounded corners=2pt, fill=orange!15, align=center,
-              text width=7.2cm, minimum height=0.9cm},
-  term/.style={draw, rounded corners=8pt, fill=green!12, align=center,
-               text width=7.2cm, minimum height=0.9cm},
-  arrow/.style={-{Stealth[length=3mm]}, thick},
-]
-\node[term] (start) {3 芯片 $\times$ N 轮并行\\（每轮独立 \texttt{--seed}，M5 10 核）};
-\node[box, below=of start] (parse) {解析 .blocks/.nets/.pl\\轮廓 $W=H=\lceil\sqrt{\Sigma A \times 1.15}\rceil$};
-\node[box, below=of parse] (run) {\texttt{run()} 阶段：找可行解\\自适应 $\alpha$（浮点窗口）+ 轮廓压力 $(r-R)^2$\\reset 上限兜底（单轮有界）};
-\node[box, below=of run] (run2) {\texttt{run2()} 阶段：精修 HPWL\\低温冷却 + best 更新};
-\node[dec, below=of run2] (filter) {可行过滤：bbox $\le$ 轮廓 side？};
-\node[box, below left=1.2cm and -0.5cm of filter] (discard) {丢弃该轮};
-\node[box, below right=1.2cm and -0.5cm of filter] (keep) {计入候选};
-\node[box, below=of keep] (best) {N 轮中取 HPWL 最小 \texttt{best\_rpt/log}};
-\node[box, below=of best] (verify) {Python 独立复核\\无重叠 / 尺寸保持 / 不越界};
-\node[term, below=of verify] (out) {产出：\texttt{q2\_metrics.csv}\\ + 每芯片 11 张图（时间戳目录）};
-
-\draw[arrow] (start) -- (parse);
-\draw[arrow] (parse) -- (run);
-\draw[arrow] (run) -- (run2);
-\draw[arrow] (run2) -- (filter);
-\draw[arrow] (filter) -- node[right] {否} (discard);
-\draw[arrow] (filter) -- node[right] {是} (keep);
-\draw[arrow] (discard) |- (keep);
-\draw[arrow] (keep) -- (best);
-\draw[arrow] (best) -- (verify);
-\draw[arrow] (verify) -- (out);
-\end{tikzpicture}
-\caption{Q2 多起点并行求解流程图}
-\end{figure}
-
-\subsection{流程图说明}
-
-\begin{enumerate}
-    \item \textbf{多起点并行}：每个 \texttt{bin/main q2 ... --seed s} 是一个独立退火
-          实例（不同初始树与扰动序列），三芯片并行、每芯片内部 N 轮并行（峰值 9 进程）。
-    \item \textbf{run() 阶段}：以面积与长宽比加权代价驱动，自适应 $\alpha$ 随可行性
-          窗口滑动（浮点连续化），把布局压进轮廓；reset 机制保证"找不到可行解"时
-          单轮时间有界（上限 $N/16+1$ 次温度重置）。
-    \item \textbf{run2() 阶段}：从 run 的 best 出发，低温精修 HPWL。
-    \item \textbf{可行过滤}：bbox 超出轮廓的轮次直接丢弃（不污染最优）。
-    \item \textbf{独立复核}：Python 侧重新解析文件、逐对检查重叠/尺寸/越界，
-          不信任 C++ 单侧结果。
-\end{enumerate}
-
-% ============================================================
-\section{Phase 1：C++ 核心 floor\_plan.hpp（Q2 视角）}
-% ============================================================
-
-\subsection{Q2 相关的关键结构}
+\subsection{可行性阶段（run）}
 
 \begin{itemize}
-    \item \texttt{cost()}：返回 (HPWL, W, H)；HPWL 按引脚几何中心
-          （块：$2x+w$，终端：$2x$），全量扫描线网（无增量近似）。
-    \item \texttt{feas(cost)}：Q2 模式检查 \texttt{W $\le$ \_W \&\& H $\le$ \_H}。
-    \item 解析器：完整读取 .blocks/.nets/.pl（HPWL 依赖终端预计算
-          \texttt{NET::update}，线网按 id 排序）。
-    \item \texttt{NODE} 位压缩：10-bit 父子/左右指针 + 旋转位（无符号存储，
-          消除有符号位移疑虑）。
+    \item 扰动算子与问题 1 相同（旋转 0.30 / 删除-插入 0.35 / 交换 0.35）；
+    \item 自适应 $\alpha = \alpha_{base} + (1-\alpha_{base})\frac{N_{\text{feas}}}{N}$
+    随可行性浮点窗口滑动；$\beta$ 在可行后递增；
+    \item 温度重置（reheating）上限 $N/16 + 1$ 次，保证单轮时间有界
+    （差种子不会无限空转）；
+    \item 每温度层输出收敛 log + 记录 best 树快照（9 等分）。
 \end{itemize}
 
-% ============================================================
-\section{Phase 2：两阶段退火引擎 sa.hpp}
-% ============================================================
-
-\subsection{run()：可行性阶段}
+\subsection{精修阶段（run2）}
 
 \begin{itemize}
-    \item 代价 $\text{norm\_cost} = \alpha\frac{A}{\bar A} +
-          \beta\frac{\text{HPWL}}{\bar H} + (1-\alpha-\beta)\frac{(r-R)^2}{\bar r}$。
-    \item $\alpha = \alpha_{base} + (1-\alpha_{base})\frac{N_{feas}}{N}$
-          （浮点连续化，随可行性窗口滑动）；$\beta$ 在可行后递增施加轮廓压力。
-    \item reset 机制：$tot\_feas=0$ 时温度重置，上限 $N/16+1$ 次，保证有界。
-    \item 每温度层写收敛 log + 记录 best 树快照（9 等分输出）。
+    \item 从 run 的 best 出发，代价为式 \eqref{eq:hpwl} 驱动的
+    $c_{\text{true}}$；
+    \item 初始温度 $T_0 / \text{t2\_div}$（默认 $T_0/50$，低温快速下山）；
+    \item best 只在\textbf{可行且更优}时更新；
+    \item 终止条件与问题 1 相同（温度下界 / 拒绝率 / 迭代上限 /
+    reset 上限）。
 \end{itemize}
 
-\subsection{run2()：精修阶段}
-
-\begin{itemize}
-    \item 从 run 的 best 出发，代价 $\text{true\_cost}$（面积与 HPWL 加权）。
-    \item 初始温度 $\_init\_T/50$，低温快速下山；best 只在可行且更优时更新。
-    \item \texttt{tot\_feas} 初始化为当前 best 的可行性（修复：避免从可行解
-          出发仍触发 reset 空转）。
-\end{itemize}
-
-% ============================================================
-\section{Phase 3：CLI main.cpp}
-% ============================================================
-
-\begin{lstlisting}[language=bash]
-./bin/main q2 <alpha> <blocks> <nets> <pl> <rpt> [dead_ratio]
-           [--log <file>] [--feas-only] [--seed <n>]
-\end{lstlisting}
-
-\begin{itemize}
-    \item \texttt{<dead\_ratio>}：轮廓死区比例（Q2 固定 0.15；Q3 二分传不同值）。
-    \item \texttt{--feas-only}：只跑 run() 判定可行性（Q3 专用，找到首可行即返回）。
-    \item \texttt{--seed}：随机种子（默认当前时间），配合 \texttt{seed\_base} 复现。
-    \item 输出 .rpt：cost / hpwl / area / W H / time / 每模块坐标。
-\end{itemize}
-
-% ============================================================
-\section{Phase 4：多起点并行求解 q2\_solver.py}
-% ============================================================
+\subsection{多起点并行取优与可行过滤}
 
 \begin{enumerate}
     \item 任务分解：\texttt{(chip, round, seed)} 全部提交线程池
-          （3 芯片 $\times$ 3 轮并行 $=$ 峰值 9 进程，M5 10 核吃满）。
+    （3 芯片 $\times$ 3 轮并行 $=$ 峰值 9 进程）；
     \item 种子分配：\texttt{seed = seed\_base + chip\_idx*1000 + round}
-          （确定性、互异、可复现）。
-    \item 每轮独立输出 \texttt{q2\_<chip>\_r<round>.rpt/log}。
-    \item 可行过滤（bbox $\le$ side）后取 HPWL 最小轮次为 best。
-    \item 汇总 \texttt{q2\_metrics.csv}（含 \texttt{seed\_base} 复现依据）。
-    \item 出图：\texttt{figs/<时间戳>/<chip>/} 每芯片 11 张
-          （9 快照 + 收敛 + 布图轮廓框）。
+    （确定性、互异、可复现）；
+    \item \textbf{可行过滤}：bbox 超出轮廓（$W > \text{side}$ 或
+    $H > \text{side}$）的轮次直接丢弃，不污染最优；
+    \item 汇总 \texttt{q2\_metrics.csv}（side / HPWL / 利用率 / seed 复现依据）。
 \end{enumerate}
 
-% ============================================================
-\section{测试套件 test\_main.cpp（1135 断言）}
-% ============================================================
+\subsection{参数调优}
 
-\begin{itemize}
-    \item Q2 专属用例：
-          \texttt{test\_q2\_run\_snapshots}（run 阶段 9 快照格式与坐标合法）、
-          \texttt{test\_q2\_feas\_only}（可行/不可行实例判定正确）、
-          \texttt{test\_q2\_end\_to\_end\_hpwl}（SA 结果 HPWL 与独立 oracle 全等）。
-    \item 共享 oracle 体系：独立 HPWL、暴力枚举、定义校验、穷举差分。
-    \item \texttt{make test}（1135）+ \texttt{make test-san}（ASan/UBSan）双轨。
-\end{itemize}
+% TODO: λ 扫描与 t2-div 扫描完成后，以 scan/results/q2 更新下表。
+\subsubsection{t2-div（精修初始温度除数）}
 
-% ============================================================
-\section{关键设计决策}
-% ============================================================
-
-\subsection{为什么多起点并行取最优？}
-
-Q2 轮廓紧（死区 15\%），单次退火结果依赖种子：n300 单轮 HPWL 实测波动
-574k$\sim$3152k。N 个独立实例并行、取 HPWL 最优——搜索质量单调不差于单实例，
-且进程级并行吃满 10 核（实测 96-99\%）。
-
-\subsection{为什么 \texttt{--seed} 显式化？}
-
-默认 \texttt{srand(time)} 使结果不可复现（论文评审硬伤）。显式种子 +
-\texttt{seed\_base} 记录后，任意结果可精确复现。
-
-\subsection{为什么 run() 需要 reset 上限？}
-
-差种子时 run() 可能长时间找不到可行解（温度重置循环）。上限
-$N/16+1$ 次重置保证单轮有界（避免"卡死"），配合多起点对冲概率。
-
-\subsection{已知弱点（如实记录，当前为冻结基线）}
-
-\begin{itemize}
-    \item run() 可行性搜索对 n300 不稳定（好/差种子单轮 1.5$\sim$7min 波动）。
-    \item 8 轮取优的轮间方差大：n100 spread 192\%、n300 spread 449\%；
-          中位数远差于最优（30$\sim$46\%）——best 存在运气成分。
-    \item 提升方向（不改变核心算法）：增加轮数、run2 精修强度调优、
-          分层筛选种子——留待参数优化阶段。
-\end{itemize}
-
-% ============================================================
-\section{实际运行结果}
-% ============================================================
-
-\subsection{指标汇总（多起点 8 轮并行取优，$\alpha=0.5$，dead\_ratio=0.15）}
+\textbf{t2-div 越大，run2 初始温度越低（更"冷"的精修）}。经参数扫描
+（\texttt{scan/results/q2}，16 轮固定种子），最优 t2-div \textbf{随芯片
+漂移}：
 
 \begin{table}[H]
 \centering
+\small
+\caption{Q2 t2-div 扫描（HPWL 最优值，TODO：n300 新数据确认后更新）}
+\begin{tabular}{lcccc}
+\toprule
+芯片 & 冻结交付（t2=50） & 最优 t2 & scan 最优 HPWL & 提升 \\
+\midrule
+n100 & 235183.0 & \textbf{35} & 225403.5 & $-4.16\%$ \\
+n200 & 403295.0 & \textbf{60} & 380261.0 & $-5.71\%$ \\
+n300 & 574322.5 & 50 & 542895.0 & $-5.47\%$（待确认） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+    \item 冻结交付为 t2-div = 50、8 轮；scan 为 16-30 轮 + 最优 t2；
+    \item 提升来自\textbf{更多轮次 + t2 调优}共同作用；
+    \item 论文最终数值以参数定稿后的交付重跑为准。
+\end{itemize}
+
+\subsubsection{轮次与种子}
+
+\begin{itemize}
+    \item 交付取 8 轮；scan 显示 16-30 轮仍有少量增益；
+    \item 种子显式管理（\texttt{--seed} + \texttt{seed\_base}），
+    任意结果可精确复现。
+\end{itemize}
+
+\subsection{复杂度分析}
+
+\begin{itemize}
+    \item 单次解码 $O(n)$（摊还），HPWL 计算 $O(\sum_e |e|)$；
+    \item 单温度层 $O(rnd \cdot n)$，$rnd = 2n + 20$；
+    \item 单轮退火由降温/reset 动态决定；每芯片 $N$ 轮并行、
+    三芯片并行（进程级，实测 10 核吃满 96--99\%）。
+\end{itemize}
+
+% ============================================================
+\section{结果与验证}
+% ============================================================
+
+\subsection{求解结果}
+
+% TODO: 参数定稿（t2-div/轮次）后，以 q2/output/q2_metrics.csv 重算更新。
+\begin{table}[H]
+\centering
+\small
+\caption{Q2 三芯片求解结果（冻结交付，8 轮取优，$d=0.15$）}
 \begin{tabular}{lcccccc}
 \toprule
-芯片 & 轮廓 side & HPWL & 面积利用率 & 理论上限 & 合法性 \\
+芯片 & 轮廓 side & HPWL & 面积利用率 & 理论上限 & 耗时(s) & 合法性 \\
 \midrule
-n100 & 455 & 235183 & 0.867 & 0.8696 & 合法 \\
-n200 & 450 & 403295 & 0.868 & 0.8696 & 合法 \\
-n300 & 561 & 574322 & 0.868 & 0.8696 & 合法 \\
+n100 & 455 & 235183.0 & 0.867 & 0.8696 & 17.0 & 合法 \\
+n200 & 450 & 403295.0 & 0.868 & 0.8696 & 257.1 & 合法 \\
+n300 & 561 & 574322.5 & 0.868 & 0.8696 & 569.3 & 合法 \\
 \bottomrule
 \end{tabular}
 \end{table}
-
-面积利用率 $\eta = \dfrac{\Sigma A}{\text{side}^2}$。由题目公式(1)
-$\text{side} = \lceil \sqrt{\Sigma A\,(1+d)}\,\rceil$ 可得 $\text{side}^2 \ge \Sigma A(1+d)$，
-故利用率存在\textbf{严格上界}：
-
-\begin{equation}
-\eta \le \frac{1}{1+d} = \frac{1}{1.15} = 0.8696
-\end{equation}
-
-（$\lceil\cdot\rceil$ 只会使 $\text{side}$ 更大，上界随之更紧。）实测三芯片
-0.867$\sim$0.868，与上界差距 $<0.3\%$——布局紧凑度逼近公式(1)决定的理论极限。
-
-\subsection{多轮统计（8 轮 HPWL 分布，评估稳定性）}
 
 \begin{table}[H]
 \centering
-\begin{tabular}{lccccc}
+\small
+\caption{Q2 scan 最优参数结果（t2-div 调优 + 更多轮次，TODO 定稿后并入上表）}
+\begin{tabular}{lcccc}
 \toprule
-芯片 & min & 中位数 & max & spread & 中位/最优 \\
+芯片 & 最优 t2-div & HPWL & 较冻结提升 & 状态 \\
 \midrule
-n100 & 235183 & 304632 & 687833 & 192\% & 1.30 \\
-n200 & 403295 & 560428 & 585763 & 45\% & 1.39 \\
-n300 & 574322 & 838620 & 3152712 & 449\% & 1.46 \\
+n100 & 35 & 225403.5 & $-4.16\%$ & 已完成 \\
+n200 & 60 & 380261.0 & $-5.71\%$ & 已完成 \\
+n300 & 50 & 542895.0 & $-5.47\%$ & 待最终确认 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-% ============================================================
-\section{文件依赖关系}
-% ============================================================
-
-\begin{lstlisting}
-q2_solver.py
-  |-- cpp_solver/bin/main          (编译自 main.cpp + sa.hpp + floor_plan.hpp)
-  |-- data/raw/{n100,n200,n300}.{blocks,nets,pl}
-  |-- common/{visualize,verify}.py
-  `-- q2/visualization/plot_{floorplan,convergence,snapshots}.py
-\end{lstlisting}
-
-% ============================================================
-\section{运行指南}
-% ============================================================
-
-\subsection{环境要求}
+\subsection{结果讨论}
 
 \begin{itemize}
-    \item g++（Apple clang，\texttt{-std=c++17}，无第三方依赖）。
-    \item conda 环境 \texttt{math}（Python 3.9+，matplotlib）。
-    \item TeX Live 2026（xelatex + ctex，编译本指南）。
+    \item \textbf{利用率逼近理论上限}：三芯片 0.867$\sim$0.868 ，
+    与上界 0.8696 差距 $< 0.3\%$——布局紧凑度已达式 \eqref{eq:side}
+    决定的理论极限（死区不可压缩，矩形打包必然留缝）；
+    \item \textbf{HPWL 可优化空间}：scan 显示 t2-div 调优 + 更多轮次可再降
+    4$\sim$6\%（n100 收益最大），最终数值以定稿为准；
+    \item \textbf{轮间方差（如实记录）}：8 轮 HPWL 分布显示
+    单次退火不稳定，best 存在运气成分：
+
+    \begin{table}[H]
+    \centering
+    \small
+    \caption{8 轮 HPWL 分布统计}
+    \begin{tabular}{lccccc}
+    \toprule
+    芯片 & min & 中位数 & max & spread & 中位/最优 \\
+    \midrule
+    n100 & 235183 & 304632 & 687833 & 192\% & 1.30 \\
+    n200 & 403295 & 560428 & 585763 & 45\% & 1.39 \\
+    n300 & 574322 & 838620 & 3152712 & 449\% & 1.46 \\
+    \bottomrule
+    \end{tabular}
+    \end{table}
+
+    这正是\textbf{多起点取优}的意义所在：中位数远差于最优
+    （30$\sim$46\%），单实例无法稳定复现最优。
 \end{itemize}
 
-\subsection{完整运行流程}
+\subsection{独立合法性复核}
 
-\begin{lstlisting}[language=bash]
-cd cpp_solver && make && make test      # 编译 + 白盒测试
-cd ..
+求解器输出坐标后，用\textbf{独立于 C++ 的 Python 实现}复核：
+\begin{enumerate}
+    \item 模块个数与输入一致；
+    \item 两两无重叠（严格相交语义）；
+    \item 每模块有效尺寸恰为原始尺寸的置换；
+    \item \textbf{不越界}：外接矩形 $W \le \text{side}$ 且 $H \le \text{side}$。
+\end{enumerate}
+三组芯片全部通过（见"合法性"列）。
+
+% ============================================================
+\section{正确性保障与可复现性}
+% ============================================================
+
+\subsection{工程保障}
+
+\begin{itemize}
+    \item 共享核心（B$^*$ 树 / 解码 / HPWL oracle）由 \textbf{1135 断言
+    白盒测试} + ASan/UBSan 双轨保证（含独立 HPWL oracle、暴力枚举、
+    Q2 专属可行判定/端到端用例）；
+    \item 求解与可视化解耦；原始数据只读；
+    \item 种子显式管理：CSV 记录 \texttt{seed\_base}，任意结果可按
+    \texttt{seed\_base + chip\_idx*1000 + round} 精确复现。
+\end{itemize}
+
+\subsection{运行命令与产物}
+
+{\small
+\begin{verbatim}
+cd cpp_solver && make && make test      # 编译 + 白盒测试（1135 断言）
 conda activate math
 python q2/q2_solver.py --repeats 8      # 多起点并行求解 + 汇总 + 出图
-python q2/q2_solver.py --skip-solve     # 只重出图/汇总（复用已有结果）
-\end{lstlisting}
-
-\subsection{常见问题}
-
-\begin{enumerate}
-    \item \textbf{图没更新}：求解只写 output/，画图每次新建时间戳目录——看最新目录。
-    \item \textbf{HPWL 想更好}：增大 \texttt{--repeats}（纯参数，不改变算法）。
-    \item \textbf{复现}：CSV 中 \texttt{seed\_base} + 每轮 \texttt{--seed} 公式
-          （\texttt{seed\_base + chip\_idx*1000 + round}）即可复现。
-    \item \textbf{CPU 利用}：峰值 9 进程（3 芯片 $\times$ 3 轮），M5 10 核吃满。
-\end{enumerate}
-
-% ============================================================
-\section{合规清单}
-% ============================================================
+\end{verbatim}
+}
 
 \begin{itemize}
-    \item 原始数据 \texttt{data/raw/} 为只读副本，求解器不修改输入文件。
-    \item 全部结果可通过 \texttt{make test}（1135 断言）+ \texttt{make test-san} 复现。
-    \item 随机种子显式管理（\texttt{--seed} + \texttt{seed\_base}），结果可复现；
-          论文数值以 \texttt{q2\_metrics.csv} 与 \texttt{figs/<时间戳>/} 为准。
-    \item 已知弱点（轮间方差）如实记录，未作任何美化。
+    \item \texttt{q2/output/q2\_metrics.csv}：指标汇总（论文数值以此为准）；
+    \item \texttt{q2/output/q2\_<chip>.rpt/log}：最优布局 + 收敛轨迹；
+    \item \texttt{q2/visualization/figs/<时间戳>/<chip>/}：每芯片 11 张图。
 \end{itemize}
+
+% ============================================================
+\begin{thebibliography}{9}
+\bibitem{bstar} Chang Y C, Chang Y W, Wu G M, et al. B*-Trees: a new
+  representation for non-slicing floorplans[C]// Proceedings of the 37th
+  Annual Design Automation Conference (DAC). 2000: 458--463.
+\bibitem{fastsa} Chen T C, Chang Y W. Modern floorplanning based on B*-tree
+  and fast simulated annealing[J]. IEEE Transactions on Computer-Aided
+  Design of Integrated Circuits and Systems, 2006, 25(4): 637--650.
+\end{thebibliography}
 
 \end{document}
