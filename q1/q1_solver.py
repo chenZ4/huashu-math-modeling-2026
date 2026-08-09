@@ -11,7 +11,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BIN = os.path.join(ROOT, "cpp_solver", "bin", "main")
+BIN = os.path.join(ROOT, "cpp_solver_opt", "bin", "main")
 DATA = os.path.join(ROOT, "data", "raw")
 Q1 = os.path.join(ROOT, "q1")
 OUT = os.path.join(Q1, "output")
@@ -73,20 +73,24 @@ def verify(rpt, dims):
     return True, "ok"
 
 
-def run_one(chip, alpha, dead, repeats=8):
+def run_one(chip, alpha, dead, repeats=8, t2_div=0, outdir=None):
+    out = outdir or OUT
+    os.makedirs(out, exist_ok=True)
     blocks_path = os.path.join(DATA, f"{chip}.blocks")
     nets_path = os.path.join(DATA, f"{chip}.nets")
     pl_path = os.path.join(DATA, f"{chip}.pl")
-    rpt = os.path.join(OUT, f"q1_{chip}.rpt")
-    log = os.path.join(OUT, f"q1_{chip}.log")
-    best_rpt = os.path.join(OUT, f"q1_{chip}_best.rpt")
-    best_log = os.path.join(OUT, f"q1_{chip}_best.log")
+    rpt = os.path.join(out, f"q1_{chip}.rpt")
+    log = os.path.join(out, f"q1_{chip}.log")
+    best_rpt = os.path.join(out, f"q1_{chip}_best.rpt")
+    best_log = os.path.join(out, f"q1_{chip}_best.log")
     best = None
     for r in range(max(1, repeats)):
         seed = BASE_SEED + CHIP_IDX[chip] * 1000 + r
-        subprocess.run([BIN, "q1", str(alpha), blocks_path, nets_path, pl_path,
-                        rpt, str(dead), "--log", log, "--seed", str(seed)],
-                       check=True)
+        cmd = [BIN, "q1", str(alpha), blocks_path, nets_path, pl_path,
+               rpt, str(dead), "--log", log, "--seed", str(seed)]
+        if t2_div > 0:
+            cmd += ["--t2-div", str(t2_div)]
+        subprocess.run(cmd, check=True)
         lines = open(rpt).read().splitlines()
         W, H = map(int, lines[3].split())
         area = int(lines[2])
@@ -113,9 +117,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--alpha", type=float, default=LAMBDA, help="面积权重 λ")
     ap.add_argument("--repeats", type=int, default=3, help="每芯片求解轮数，取最优")
+    ap.add_argument("--t2-div", type=float, default=0, help="精修初始温度除数（0=默认，n200 定稿取 30）")
+    ap.add_argument("--outdir", default=OUT, help="输出目录（定稿用 output/final）")
     ap.add_argument("--skip-solve", action="store_true", help="跳过求解，只汇总已存在结果")
     args = ap.parse_args()
-    os.makedirs(OUT, exist_ok=True)
+    os.makedirs(args.outdir, exist_ok=True)
     run_dir = new_run_dir()
     print("run dir:", run_dir)
 
@@ -123,7 +129,7 @@ def main():
     if args.skip_solve:
         for chip in CHIPS:
             dims, total = parse_blocks(os.path.join(DATA, f"{chip}.blocks"))
-            rpt = os.path.join(OUT, f"q1_{chip}.rpt")
+            rpt = os.path.join(args.outdir, f"q1_{chip}.rpt")
             if not os.path.exists(rpt):
                 continue
             lines = open(rpt).read().splitlines()
@@ -139,10 +145,11 @@ def main():
             })
     else:
         with ThreadPoolExecutor(max_workers=3) as ex:
-            results = list(ex.map(lambda c: run_one(c, args.alpha, DEAD, args.repeats),
-                                  CHIPS))
+            results = list(ex.map(
+                lambda c: run_one(c, args.alpha, DEAD, args.repeats,
+                                  args.t2_div, args.outdir), CHIPS))
 
-    csv_path = os.path.join(OUT, "q1_metrics.csv")
+    csv_path = os.path.join(args.outdir, "q1_metrics.csv")
     with open(csv_path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(results[0].keys()))
         w.writeheader()
@@ -151,8 +158,8 @@ def main():
 
     for r in results:
         chip = r["chip"]
-        rpt = os.path.join(OUT, f"q1_{chip}.rpt")
-        log = os.path.join(OUT, f"q1_{chip}.log")
+        rpt = os.path.join(args.outdir, f"q1_{chip}.rpt")
+        log = os.path.join(args.outdir, f"q1_{chip}.log")
         chip_dir = os.path.join(run_dir, chip)
         os.makedirs(chip_dir, exist_ok=True)
         subprocess.run([sys.executable, os.path.join(Q1, "visualization", "plot_floorplan.py"),

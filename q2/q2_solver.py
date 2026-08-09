@@ -15,7 +15,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "common"))
 from verify import parse_blocks, verify_layout
 
-BIN = os.path.join(ROOT, "cpp_solver", "bin", "main")
+BIN = os.path.join(ROOT, "cpp_solver_opt", "bin", "main")
 DATA = os.path.join(ROOT, "data", "raw")
 Q2 = os.path.join(ROOT, "q2")
 OUT = os.path.join(Q2, "output")
@@ -37,31 +37,35 @@ def new_run_dir():
     return run_dir
 
 
-def run_round(chip, alpha, dead, seed, rpt, log):
-    subprocess.run([BIN, "q2", str(alpha),
-                    os.path.join(DATA, f"{chip}.blocks"),
-                    os.path.join(DATA, f"{chip}.nets"),
-                    os.path.join(DATA, f"{chip}.pl"),
-                    rpt, str(dead), "--log", log, "--seed", str(seed)],
-                   check=True)
+def run_round(chip, alpha, dead, seed, rpt, log, t2_div=0):
+    cmd = [BIN, "q2", str(alpha),
+           os.path.join(DATA, f"{chip}.blocks"),
+           os.path.join(DATA, f"{chip}.nets"),
+           os.path.join(DATA, f"{chip}.pl"),
+           rpt, str(dead), "--log", log, "--seed", str(seed)]
+    if t2_div > 0:
+        cmd += ["--t2-div", str(t2_div)]
+    subprocess.run(cmd, check=True)
 
 
-def run_one(chip, alpha, dead, rounds):
+def run_one(chip, alpha, dead, rounds, t2_div=0, outdir=None):
+    out = outdir or OUT
+    os.makedirs(out, exist_ok=True)
     dims, total = parse_blocks(os.path.join(DATA, f"{chip}.blocks"))
     side = math.ceil(math.sqrt(total * (1.0 + dead)))
     tasks = []
     for r in range(rounds):
         tasks.append((chip, alpha, dead,
                       BASE_SEED + CHIP_IDX[chip] * 1000 + r,
-                      os.path.join(OUT, f"q2_{chip}_r{r}.rpt"),
-                      os.path.join(OUT, f"q2_{chip}_r{r}.log")))
+                      os.path.join(out, f"q2_{chip}_r{r}.rpt"),
+                      os.path.join(out, f"q2_{chip}_r{r}.log"), t2_div))
     with ThreadPoolExecutor(max_workers=ROUND_WORKERS) as ex:
         list(ex.map(lambda t: run_round(*t), tasks))
 
     best = None
     for r in range(rounds):
-        rpt = os.path.join(OUT, f"q2_{chip}_r{r}.rpt")
-        log = os.path.join(OUT, f"q2_{chip}_r{r}.log")
+        rpt = os.path.join(out, f"q2_{chip}_r{r}.rpt")
+        log = os.path.join(out, f"q2_{chip}_r{r}.log")
         lines = open(rpt).read().splitlines()
         W, H = map(int, lines[3].split())
         if W > side or H > side:
@@ -79,8 +83,8 @@ def run_one(chip, alpha, dead, rounds):
             "note": "no feasible solution found in any round",
         }
     hpwl, W, H, area, time_s, best_rpt, best_log = best
-    rpt = os.path.join(OUT, f"q2_{chip}.rpt")
-    log = os.path.join(OUT, f"q2_{chip}.log")
+    rpt = os.path.join(out, f"q2_{chip}.rpt")
+    log = os.path.join(out, f"q2_{chip}.log")
     shutil.copy(best_rpt, rpt)
     shutil.copy(best_log, log)
     ok, msg = verify_layout(rpt, dims, outline=(side, side))
@@ -95,9 +99,11 @@ def run_one(chip, alpha, dead, rounds):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--repeats", type=int, default=8, help="每芯片并行轮数")
+    ap.add_argument("--t2-div", type=float, default=0, help="精修初始温度除数（0=默认；n100/n200/n300 定稿取 35/60/70）")
+    ap.add_argument("--outdir", default=OUT, help="输出目录（定稿用 output/final）")
     ap.add_argument("--skip-solve", action="store_true")
     args = ap.parse_args()
-    os.makedirs(OUT, exist_ok=True)
+    os.makedirs(args.outdir, exist_ok=True)
     run_dir = new_run_dir()
     print("run dir:", run_dir)
 
@@ -106,7 +112,7 @@ def main():
         for chip in CHIPS:
             dims, total = parse_blocks(os.path.join(DATA, f"{chip}.blocks"))
             side = math.ceil(math.sqrt(total * (1.0 + DEAD)))
-            rpt = os.path.join(OUT, f"q2_{chip}.rpt")
+            rpt = os.path.join(args.outdir, f"q2_{chip}.rpt")
             if not os.path.exists(rpt):
                 continue
             lines = open(rpt).read().splitlines()
@@ -121,10 +127,11 @@ def main():
             })
     else:
         with ThreadPoolExecutor(max_workers=CHIP_WORKERS) as ex:
-            results = list(ex.map(lambda c: run_one(c, ALPHA, DEAD, args.repeats),
-                                  CHIPS))
+            results = list(ex.map(
+                lambda c: run_one(c, ALPHA, DEAD, args.repeats,
+                                  args.t2_div, args.outdir), CHIPS))
 
-    csv_path = os.path.join(OUT, "q2_metrics.csv")
+    csv_path = os.path.join(args.outdir, "q2_metrics.csv")
     with open(csv_path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(results[0].keys()))
         w.writeheader()
@@ -136,8 +143,8 @@ def main():
         chip = r["chip"]
         chip_dir = os.path.join(run_dir, chip)
         os.makedirs(chip_dir, exist_ok=True)
-        rpt = os.path.join(OUT, f"q2_{chip}.rpt")
-        log = os.path.join(OUT, f"q2_{chip}.log")
+        rpt = os.path.join(args.outdir, f"q2_{chip}.rpt")
+        log = os.path.join(args.outdir, f"q2_{chip}.log")
         subprocess.run([sys.executable, os.path.join(viz, "plot_floorplan.py"),
                         "--rpt", rpt, "--out", os.path.join(chip_dir, "floorplan.png")],
                        check=True)
