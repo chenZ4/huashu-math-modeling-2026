@@ -163,6 +163,7 @@ def _run_chip_q3(cfg, chip, force):
     cname = cfg["name"]
     out_path = os.path.join(RESULTS, "q3", f"{group}_{cname}_{chip}.csv")
     seeds = cfg.get("seeds", 3)
+    confirm_seeds = cfg.get("confirm_seeds", seeds)
     eps = cfg.get("eps", 1e-4)
     prev_best = None
     if os.path.exists(out_path):
@@ -182,7 +183,7 @@ def _run_chip_q3(cfg, chip, force):
         d_b, _ = bisect(chip, total, work_dir, trace, eps=eps,
                         coarse_seeds=max(1, seeds // 2), precise_seeds=seeds)
         d_s, steps = confirm_minimum(chip, d_b, total, work_dir,
-                                     verify_seeds=seeds)
+                                     verify_seeds=confirm_seeds)
     except Exception as e:
         print(f"[FAIL] q3 {cname} @ {chip}: {e}")
         with state.lock:
@@ -239,6 +240,8 @@ def _run_chip_sa(cfg, chip, force):
                rpt, str(cfg.get("dead", 0.15)), "--seed", str(seed)]
         if q == "q2":
             cmd += ["--t2-div", str(cfg.get("t2_div", 50))]
+        elif q == "q1" and cfg.get("t2_div"):
+            cmd += ["--t2-div", str(cfg["t2_div"])]
         with state.lock:
             state.cur_cmd = " ".join(cmd)
         try:
