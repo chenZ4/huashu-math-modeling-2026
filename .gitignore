@@ -10,3 +10,4 @@ cpp_solver/bin/
 
 *.tmp
 scan/results/q3/work/
+q3/output/*/bisect_work/
