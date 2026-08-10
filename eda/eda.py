@@ -1,13 +1,18 @@
 """数据探索性分析（EDA）：三芯片原始数据统计 + 出图（给论文手选择）。
 注：与题目领域 EDA（Electronic Design Automation）同名，论文可呼应。"""
+import collections
 import csv
 import math
 import os
 import re
+import statistics
+
+import numpy as np
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from scipy import stats as sp_stats
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data", "raw")
@@ -185,7 +190,126 @@ def main():
     fig.tight_layout()
     save(fig, "eda_08_compare.png")
 
+    # ============ 数据分析三维度（论证式 EDA）============
+    # ---- 统计表 1：几何异质性 ----
+    rows_hetero = [["chip", "n_blocks", "area_cv", "area_ratio_max_min",
+                    "aspect_gt3", "aspect_gt3_pct"]]
+    for chip in CHIPS:
+        dims = load_blocks(chip)
+        areas = [w * h for w, h in dims.values()]
+        ratios = [max(w, h) / min(w, h) for w, h in dims.values()]
+        cv = statistics.pstdev(areas) / statistics.mean(areas)
+        ext = sum(1 for r in ratios if r > 3)
+        rows_hetero.append([chip, len(areas), f"{cv:.4f}",
+                            f"{max(areas)/min(areas):.1f}x", ext,
+                            f"{ext/len(areas)*100:.1f}%"])
+    with open(os.path.join(OUT, "eda_heterogeneity.csv"), "w", newline="") as f:
+        csv.writer(f).writerows(rows_hetero)
+
+    # ---- 统计表 2：Top5% 枢纽节点 ----
+    with open(os.path.join(OUT, "eda_hubs.csv"), "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["chip", "hub_module", "degree"])
+        for chip in CHIPS:
+            deg = collections.Counter()
+            cur = None
+            for line in open(os.path.join(DATA, f"{chip}.nets")):
+                parts = line.split()
+                if len(parts) >= 2 and parts[0] == "NetDegree":
+                    cur = []
+                elif cur is not None and parts and parts[0].startswith("b"):
+                    deg[parts[0]] += 1
+            k = max(1, round(len(deg) * 0.05))
+            for m, d in sorted(deg.items(), key=lambda x: -x[1])[:k]:
+                w.writerow([chip, m, d])
+
+    # ---- 图 A：模块面积 KDE（log10 横轴）----
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
+    for ax, chip in zip(axes, CHIPS):
+        dims = load_blocks(chip)
+        areas = [math.log10(w * h) for w, h in dims.values()]
+        xs = np.linspace(min(areas) - 0.3, max(areas) + 0.3, 400)
+        kde = sp_stats.gaussian_kde(areas)
+        ax.plot(xs, kde(xs), color="#1f77b4", lw=2)
+        ax.fill_between(xs, kde(xs), alpha=0.3, color="#1f77b4")
+        ax.set_xlabel(r"$\log_{10}$(area)")
+        ax.set_ylabel("density")
+        ax.set_title(f"{chip} (CV={statistics.pstdev(areas)/statistics.mean(areas):.3f})")
+    fig.suptitle("Module Area KDE (log-scale): long-tail heterogeneity")
+    fig.tight_layout()
+    save(fig, "eda_09_area_kde.png")
+
+    # ---- 图 B：W vs H 散点 + 对角线 + 长条模块红圈 ----
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
+    for ax, chip in zip(axes, CHIPS):
+        dims = load_blocks(chip)
+        ws = [w for w, h in dims.values()]
+        hs = [h for w, h in dims.values()]
+        m = max(max(ws), max(hs)) * 1.1
+        ax.scatter(ws, hs, s=12, color="#2980b9", alpha=0.7, zorder=2)
+        ax.plot([0, m], [0, m], ls="--", color="gray", lw=1, zorder=1)
+        for name, (w, h) in dims.items():
+            if max(w, h) / min(w, h) > 3:
+                ax.scatter([w], [h], s=70, facecolor="none",
+                           edgecolor="red", lw=1.6, zorder=3)
+        ax.set_xlim(0, m)
+        ax.set_ylim(0, m)
+        ax.set_xlabel("width W")
+        ax.set_ylabel("height H")
+        ax.set_title(f"{chip}")
+    fig.suptitle("Module W vs H: extreme-aspect-ratio blocks (red circles)")
+    fig.tight_layout()
+    save(fig, "eda_10_wvsh_scatter.png")
+
+    # ---- 图 C：节点度数双对数直方图 ----
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
+    for ax, chip in zip(axes, CHIPS):
+        deg = collections.Counter()
+        cur = None
+        for line in open(os.path.join(DATA, f"{chip}.nets")):
+            parts = line.split()
+            if len(parts) >= 2 and parts[0] == "NetDegree":
+                cur = []
+            elif cur is not None and parts and parts[0].startswith("b"):
+                deg[parts[0]] += 1
+        vals = sorted(deg.values())
+        cnt = collections.Counter(vals)
+        ks = sorted(cnt)
+        pks = [v / len(vals) for v in ks]
+        ax.loglog(ks, pks, "o-", color="#8e44ad", ms=4)
+        ax.set_xlabel("degree (log)")
+        ax.set_ylabel("P(degree) (log)")
+        ax.set_title(f"{chip}")
+    fig.suptitle("Module Degree Distribution (log-log)")
+    fig.tight_layout()
+    save(fig, "eda_11_degree_loglog.png")
+
+    # ---- 图 D：Top5% 枢纽连接度 ----
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
+    for ax, chip in zip(axes, CHIPS):
+        deg = collections.Counter()
+        cur = None
+        for line in open(os.path.join(DATA, f"{chip}.nets")):
+            parts = line.split()
+            if len(parts) >= 2 and parts[0] == "NetDegree":
+                cur = []
+            elif cur is not None and parts and parts[0].startswith("b"):
+                deg[parts[0]] += 1
+        k = max(1, round(len(deg) * 0.05))
+        hubs = sorted(deg.items(), key=lambda x: -x[1])[:k]
+        names = [m for m, _ in hubs]
+        ds = [d for _, d in hubs]
+        ax.bar(range(len(ds)), ds, color="#c0392b")
+        ax.set_xticks(range(len(ds)))
+        ax.set_xticklabels(names, rotation=45, fontsize=6)
+        ax.set_ylabel("degree")
+        ax.set_title(f"{chip}: Top5% hubs")
+    fig.suptitle("Hub Nodes (top 5% degree)")
+    fig.tight_layout()
+    save(fig, "eda_12_hubs.png")
+
     print("EDA figures ->", FIGS)
+    print("统计表 -> eda_heterogeneity.csv / eda_hubs.csv")
 
 
 if __name__ == "__main__":
