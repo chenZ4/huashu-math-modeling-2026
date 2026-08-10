@@ -32,7 +32,7 @@ make
 
 - 论文数值速查 + 溯源：`paper/data_package/paper_values.md`
 - 各问详细建模与算法：`qX/qX_work_guide.pdf`（论文手工作稿风格）
-- 灵敏度分析：`qX/sensitivity/qX_sensitivity_report.pdf`（12 图 + 4 报告，图集中 `图表/`）
+- 灵敏度分析：`qX/sensitivity/qX_sensitivity_report.pdf`（4 报告；图与数据集中 `图表/灵敏度/`）
 - 灵敏度论文章节素材：`paper/sensitivity_analysis.pdf`
 
 ## 求解器用法
@@ -107,7 +107,7 @@ python q4/sensitivity/q4_sensitivity.py   # S1 旋转消融 / S2 尺寸扰动（
 ```
 
 - CSV 汇总：`qX/sensitivity/S*.csv`；报告：`qX/sensitivity/qX_sensitivity_report.pdf`
-- 图输出：根目录 `图表/QN/图/`（按题目分类）
+- 灵敏度输出：根目录 `图表/灵敏度/QN/`（图 + S 系列数据）
 
 ## 参数扫描挂机（scan/）
 
