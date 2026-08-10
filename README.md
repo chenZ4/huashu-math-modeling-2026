@@ -32,7 +32,7 @@ make
 
 - 论文数值速查 + 溯源：`paper/data_package/paper_values.md`
 - 各问详细建模与算法：`qX/qX_work_guide.pdf`（论文手工作稿风格）
-- 灵敏度分析：`qX/sensitivity/qX_sensitivity_report.pdf`（12 图 + 4 报告，图集中 `做图/`）
+- 灵敏度分析：`qX/sensitivity/qX_sensitivity_report.pdf`（12 图 + 4 报告，图集中 `图表/`）
 - 灵敏度论文章节素材：`paper/sensitivity_analysis.pdf`
 
 ## 求解器用法
@@ -107,7 +107,7 @@ python q4/sensitivity/q4_sensitivity.py   # S1 旋转消融 / S2 尺寸扰动（
 ```
 
 - CSV 汇总：`qX/sensitivity/S*.csv`；报告：`qX/sensitivity/qX_sensitivity_report.pdf`
-- 图输出：根目录 `做图/`（按分析内容命名）
+- 图输出：根目录 `图表/QN/图/`（按题目分类）
 
 ## 参数扫描挂机（scan/）
 
@@ -131,7 +131,7 @@ scan/                     参数扫描挂机（scan.py / configs.py / cross_chec
 eda/                      数据探索分析（EDA 图 + 统计汇总）
 common/                   共享 Python 库（visualize / verify）
 q1/ q2/ q3/ q4/           各问客制层（solver + output[baseline/final] + visualization[baseline/final] + work_guide + sensitivity）
-做图/                     灵敏度图集中输出（12 张）
+图表/                     论文素材总集（按题目分类：Q1-Q4 图/表/说明 + 公共/）
 paper/                    论文写作（data_package/ 数值速查表 + sensitivity_analysis.pdf）
 B题 VLSI布图规划设计/      题面与参考文献
 HW2/                      HW2 原始方案（仅参考，保持纯净）

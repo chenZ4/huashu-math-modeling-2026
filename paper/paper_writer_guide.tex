@@ -88,7 +88,7 @@ The_7th_Huashu_Cup.../
 |   |   `-- final/{chip}/        # 定稿图（floorplan/convergence/9 快照[/bisect]）
 |   |-- qN_work_guide.tex/pdf    # 建模与求解算法文档（论文手工作稿）
 |   `-- sensitivity/             # 灵敏度分析（脚本 + S*.csv + 报告 pdf）
-|-- 做图/                        # 灵敏度图集中输出（12 张）
+|-- 图表/                        # 论文素材总集（按题目分类：图/表/说明 + 公共/）
 |-- paper/
 |   |-- data_package/paper_values.md   # 数值速查表
 |   |-- sensitivity_analysis.tex/pdf   # 灵敏度论文章节素材
@@ -127,6 +127,7 @@ Q4 结果 & q4/output/final/q4\_result.csv & 最优布局 + 最优性证明素�
 Q1 结果附表 & q1/latex/q1\_tables.pdf & 定稿汇总/与冻结对比/λ/轮次/t2-div 五表 \\
 Q2 结果附表 & q2/latex/q2\_tables.pdf & 定稿汇总/与冻结对比/t2/死区/轮次分布 五表 \\
 Q3 结果附表 & q3/latex/q3\_tables.pdf & 二分判定过程/d*与HPWL/临界点扰动核验 三表 \\
+\multicolumn{3}{l}{\footnotesize 全部图表已按题目分类集中至 \texttt{图表/}（Q1-Q4 + 公共/），论文直接引用} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -143,12 +144,12 @@ Q3 结果附表 & q3/latex/q3\_tables.pdf & 二分判定过程/d*与HPWL/临界�
     （初始到最终的布局演化，可论证退火搜索过程）；
     \item \textbf{二分轨迹}：Q3 专属 \texttt{.../final/\allowbreak<chip>/\allowbreak bisect.png}
     （区间收缩 + 可行标记 + d* 标注，论证 d* 搜索）；
-    \item \textbf{灵敏度图}：\texttt{做图/*.png}（12 张，按分析内容命名）；
+    \item \textbf{灵敏度图}：\texttt{图表/QN/图/}（12 张，按题目分类）；
     \item \textbf{EDA 图}：\texttt{eda/figs/*.png}（8 张，数据规模/尺寸分布/线网统计）；
-    \item \textbf{总览图}（\texttt{做图/}）：
+    \item \textbf{总览图}（\texttt{图表/公共/总体结论/}）：
     \texttt{overall\_improvement.png}（三问 vs 冻结提升总览，建议放摘要或结果章首）、
-    \texttt{q2\_rounds\_distribution.png}（Q2 8 轮 HPWL 箱线图，论证多起点必要性）、
-    \texttt{overall\_runtime.png}（四问耗时对比）。
+    \texttt{overall\_runtime.png}（四问耗时对比）；Q2 8 轮箱线图在
+    \texttt{图表/Q2/图/q2\_rounds\_distribution.png}。
 \end{itemize}
 
 \subsection{文档类（写作参考与直接素材）}

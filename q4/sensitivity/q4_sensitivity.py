@@ -26,7 +26,7 @@ from q4_solver import (MODULES, NAMES, TOTAL_AREA, all_rotations,   # noqa: E402
                        gen_shapes, place, brute_bbox_version, rotate_90)
 
 SENS = os.path.dirname(os.path.abspath(__file__))
-FIGS = os.path.join(ROOT, "做图")
+FIGS = os.path.join(ROOT, "图表", "Q4", "图")
 os.makedirs(SENS, exist_ok=True)
 os.makedirs(FIGS, exist_ok=True)
 
@@ -206,7 +206,7 @@ def build_report(s1, s2):
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{../../做图/q4_rotation_freedom_ablation.png}
+\includegraphics[width=0.82\textwidth]{../../图表/Q4/图/q4_rotation_freedom_ablation.png}
 \caption{旋转自由度消融}
 \end{figure}
 
@@ -226,7 +226,7 @@ def build_report(s1, s2):
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{../../做图/q4_size_perturbation.png}
+\includegraphics[width=0.82\textwidth]{../../图表/Q4/图/q4_size_perturbation.png}
 \caption{模块尺寸扰动后的最小面积}
 \end{figure}
 

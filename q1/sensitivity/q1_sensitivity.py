@@ -23,7 +23,7 @@ plt.rcParams["axes.unicode_minus"] = False
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 RESULTS = os.path.join(ROOT, "scan", "results", "q1")
 SENS = os.path.dirname(os.path.abspath(__file__))
-FIGS = os.path.join(ROOT, "做图")
+FIGS = os.path.join(ROOT, "图表", "Q1", "图")
 os.makedirs(SENS, exist_ok=True)
 os.makedirs(FIGS, exist_ok=True)
 
@@ -210,13 +210,13 @@ $(A, R)$ 字典序最优。
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{../../做图/q1_lambda_sensitivity.png}
+\includegraphics[width=0.82\textwidth]{../../图表/Q1/图/q1_lambda_sensitivity.png}
 \caption{面积随 $\lambda$ 变化}
 \end{figure}
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{../../做图/q1_lambda_aspect_sensitivity.png}
+\includegraphics[width=0.82\textwidth]{../../图表/Q1/图/q1_lambda_aspect_sensitivity.png}
 \caption{长宽比随 $\lambda$ 变化}
 \end{figure}
 
@@ -237,7 +237,7 @@ repeats $= 4/8/12/16/24$。
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{../../做图/q1_repeats_convergence.png}
+\includegraphics[width=0.82\textwidth]{../../图表/Q1/图/q1_repeats_convergence.png}
 \caption{最优面积随轮次收敛}
 \end{figure}
 
@@ -255,7 +255,7 @@ t2-div $= 10/15/20/30$（$\lambda=0.5$）。
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{../../做图/q1_t2div_sensitivity.png}
+\includegraphics[width=0.82\textwidth]{../../图表/Q1/图/q1_t2div_sensitivity.png}
 \caption{最优面积随精修温度除数变化}
 \end{figure}
 

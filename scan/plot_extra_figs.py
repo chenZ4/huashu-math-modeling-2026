@@ -10,11 +10,12 @@ import numpy as np
 plt.rcParams["font.sans-serif"] = ["PingFang SC", "Heiti SC", "Songti SC"]
 plt.rcParams["axes.unicode_minus"] = False
 
-FIGS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "做图")
+FIG_OVERALL = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "图表", "公共", "总体结论")
+FIG_Q2 = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "图表", "Q2", "图")
 
 
 def save(fig, name):
-    fig.savefig(os.path.join(FIGS, name), dpi=300, bbox_inches="tight")
+    fig.savefig(os.path.join(FIG_OVERALL if name.startswith("overall") else FIG_Q2, name), dpi=300, bbox_inches="tight")
     plt.close(fig)
     print("图 ->", os.path.join(FIGS, name))
 
@@ -78,7 +79,8 @@ def fig3():
 
 
 if __name__ == "__main__":
-    os.makedirs(FIGS, exist_ok=True)
+    os.makedirs(FIG_OVERALL, exist_ok=True)
+    os.makedirs(FIG_Q2, exist_ok=True)
     fig1()
     fig2()
     fig3()
