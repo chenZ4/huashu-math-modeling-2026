@@ -14,10 +14,11 @@ FIG_OVERALL = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 FIG_Q2 = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "图表", "Q2", "图")
 
 
-def save(fig, name):
-    fig.savefig(os.path.join(FIG_OVERALL if name.startswith("overall") else FIG_Q2, name), dpi=300, bbox_inches="tight")
+def save(fig, name, d=None):
+    out = d or (FIG_OVERALL if name.startswith("overall") else FIG_Q2)
+    fig.savefig(os.path.join(out, name), dpi=300, bbox_inches="tight")
     plt.close(fig)
-    print("图 ->", os.path.join(FIGS, name))
+    print("图 ->", os.path.join(out, name))
 
 
 def fig1():
@@ -78,10 +79,51 @@ def fig3():
     save(fig, "overall_runtime.png")
 
 
+def fig4():
+    """Q2 多种子求解总 HPWL：final 定稿协议各轮 HPWL（可行/越界区分，标注 best）。"""
+    side = {"n100": 455, "n200": 450, "n300": 561}
+    colors = {"n100": "#2980b9", "n200": "#27ae60", "n300": "#c0392b"}
+    fig, ax = plt.subplots(figsize=(8, 5.5))
+    for chip in ["n100", "n200", "n300"]:
+        n = 16 if chip == "n100" else 24
+        xs, ys, bad_x, bad_y = [], [], [], []
+        for r in range(n):
+            path = f"q2/output/final/q2_{chip}_r{r}.rpt"
+            try:
+                lines = open(path).read().splitlines()
+                hpwl = float(lines[1])
+                W, H = map(int, lines[3].split())
+            except Exception:
+                continue
+            if W <= side[chip] and H <= side[chip]:
+                xs.append(r)
+                ys.append(hpwl)
+            else:
+                bad_x.append(r)
+                bad_y.append(hpwl)
+        ax.plot(xs, ys, "o-", color=colors[chip], label=f"{chip}（可行轮）")
+        if bad_x:
+            ax.plot(bad_x, bad_y, "o", mfc="none", mec=colors[chip],
+                    ms=7, label=f"{chip}（越界轮）")
+        if ys:
+            b = min(zip(ys, xs))
+            ax.annotate(f"best {b[0]:.0f}（轮 {b[1]}）", xy=(b[1], b[0]),
+                        xytext=(b[1], b[0] * 0.45),
+                        arrowprops=dict(arrowstyle="->", color="black", lw=0.8),
+                        fontsize=9)
+    ax.set_xlabel("独立随机种子（轮次）")
+    ax.set_ylabel("HPWL")
+    ax.set_title("Q2 多种子快速模拟退火求解结果（定稿协议各轮 HPWL）")
+    ax.legend(fontsize=9)
+    fig.tight_layout()
+    save(fig, "q2_multiseed_hpwl.png", FIG_Q2)
+
+
 if __name__ == "__main__":
     os.makedirs(FIG_OVERALL, exist_ok=True)
     os.makedirs(FIG_Q2, exist_ok=True)
     fig1()
     fig2()
     fig3()
+    fig4()
     print("完成")
