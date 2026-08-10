@@ -31,15 +31,21 @@ def main():
         rot = int(r["rotation_deg"])
         x0, y0 = int(r["x"]), int(r["y"])
         color = COLORS[name]
+        rects = []
         for part in r["rects"].split(";"):
             rx, ry, rw, rh = map(int, part.split(","))
+            rects.append((rx, ry, rw, rh))
             ax.add_patch(Rectangle((x0 + rx, y0 + ry), rw, rh,
                                    facecolor=color, edgecolor="black",
                                    linewidth=1.0, alpha=0.85, zorder=2))
-        bx = x0 + 2
-        by = y0 + 4
-        ax.text(bx, by, f"{name}  {rot}\N{DEGREE SIGN}", fontsize=11,
-                ha="center", va="center", fontweight="bold", zorder=3)
+        w = max(rx + rw for rx, ry, rw, rh in rects)
+        h = max(ry + rh for rx, ry, rw, rh in rects)
+        cx = x0 + w / 2.0
+        cy = y0 + h / 2.0
+        ax.text(cx, cy, f"{name}  {rot}\N{DEGREE SIGN}", fontsize=11,
+                ha="center", va="center", fontweight="bold", zorder=3,
+                bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="none",
+                          alpha=0.8))
 
     maxx = max(int(r["x"]) + 4 for r in rows)
     maxy = 0
