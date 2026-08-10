@@ -32,7 +32,7 @@ make
 
 - 论文数值速查 + 溯源：`paper/data_package/paper_values.md`
 - 各问详细建模与算法：`qX/qX_work_guide.pdf`（论文手工作稿风格）
-- 灵敏度分析：`qX/sensitivity/qX_sensitivity_report.pdf`（4 报告；图与数据集中 `图表/灵敏度/`）
+- 灵敏度分析：`图表/灵敏度/QN/qN_sensitivity_report.pdf`（LaTeX 分析 + 图 + 数据，按问收录）
 - 灵敏度论文章节素材：`paper/sensitivity_analysis.pdf`
 
 ## 求解器用法

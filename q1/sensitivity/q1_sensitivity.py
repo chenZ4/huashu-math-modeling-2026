@@ -24,6 +24,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 RESULTS = os.path.join(ROOT, "scan", "results", "q1")
 SENS = os.path.dirname(os.path.abspath(__file__))
 FIGS = os.path.join(ROOT, "图表", "灵敏度", "Q1")
+REPORT = FIGS
 os.makedirs(SENS, exist_ok=True)
 os.makedirs(FIGS, exist_ok=True)
 
@@ -170,7 +171,7 @@ def s3_t2div(rows):
 
 
 def build_report(s1, s2, s3):
-    """生成 q1_sensitivity_report.tex（表格来自数据，图引用 做图/）。"""
+    """生成 q1_sensitivity_report.tex（表格来自数据，tex 输出至 图表/灵敏度/ 下编译）。"""
     def esc(x):
         return str(x).replace("_", r"\_")
 
@@ -210,13 +211,13 @@ $(A, R)$ 字典序最优。
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{../../图表/灵敏度/Q1/q1_lambda_sensitivity.png}
+\includegraphics[width=0.82\textwidth]{q1_lambda_sensitivity.png}
 \caption{面积随 $\lambda$ 变化}
 \end{figure}
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{../../图表/灵敏度/Q1/q1_lambda_aspect_sensitivity.png}
+\includegraphics[width=0.82\textwidth]{q1_lambda_aspect_sensitivity.png}
 \caption{长宽比随 $\lambda$ 变化}
 \end{figure}
 
@@ -237,7 +238,7 @@ repeats $= 4/8/12/16/24$。
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{../../图表/灵敏度/Q1/q1_repeats_convergence.png}
+\includegraphics[width=0.82\textwidth]{q1_repeats_convergence.png}
 \caption{最优面积随轮次收敛}
 \end{figure}
 
@@ -255,7 +256,7 @@ t2-div $= 10/15/20/30$（$\lambda=0.5$）。
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{../../图表/灵敏度/Q1/q1_t2div_sensitivity.png}
+\includegraphics[width=0.82\textwidth]{q1_t2div_sensitivity.png}
 \caption{最优面积随精修温度除数变化}
 \end{figure}
 
@@ -270,7 +271,7 @@ t2-div 增大单调改善（t2-div$=30$ 时 183112，低于默认 20 的
 
 \end{document}
 """
-    path = os.path.join(SENS, "q1_sensitivity_report.tex")
+    path = os.path.join(REPORT, "q1_sensitivity_report.tex")
     with open(path, "w") as f:
         f.write(tex)
     print("  报告 ->", path)

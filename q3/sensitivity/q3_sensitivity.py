@@ -24,6 +24,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 RESULTS = os.path.join(ROOT, "scan", "results", "q3")
 SENS = os.path.dirname(os.path.abspath(__file__))
 FIGS = os.path.join(ROOT, "图表", "灵敏度", "Q3")
+REPORT = FIGS
 os.makedirs(SENS, exist_ok=True)
 os.makedirs(FIGS, exist_ok=True)
 
@@ -204,7 +205,7 @@ $K = 1/3/5/7/10/15$（n100/n200），n300 扫描至 5/7/10
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{../../图表/灵敏度/Q3/q3_seed_sensitivity.png}
+\includegraphics[width=0.82\textwidth]{q3_seed_sensitivity.png}
 \caption{$d^*$ 随判定种子数变化}
 \end{figure}
 
@@ -227,7 +228,7 @@ $\varepsilon = 10^{-3}/10^{-4}/10^{-5}$（n100，seeds=3）。
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{../../图表/灵敏度/Q3/q3_eps_sensitivity.png}
+\includegraphics[width=0.82\textwidth]{q3_eps_sensitivity.png}
 \caption{$d^*$ 随二分精度变化}
 \end{figure}
 
@@ -245,7 +246,7 @@ $d^*$ 仅变化 0.4\%（0.135323 $\to$ 0.134747）——二分精度对结果
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{../../图表/灵敏度/Q3/q3_sep_judge_confirm.png}
+\includegraphics[width=0.82\textwidth]{q3_sep_judge_confirm.png}
 \caption{判定/确认种子解耦对 $d^*$ 的影响}
 \end{figure}
 
@@ -260,7 +261,7 @@ $d^*$ 从 0.134811 降至 0.116061），确认种子决定"确认"成败
 
 \end{document}
 """
-    path = os.path.join(SENS, "q3_sensitivity_report.tex")
+    path = os.path.join(REPORT, "q3_sensitivity_report.tex")
     with open(path, "w") as fh:
         fh.write(tex)
     print("  报告 ->", path)

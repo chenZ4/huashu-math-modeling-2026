@@ -27,6 +27,7 @@ from q4_solver import (MODULES, NAMES, TOTAL_AREA, all_rotations,   # noqa: E402
 
 SENS = os.path.dirname(os.path.abspath(__file__))
 FIGS = os.path.join(ROOT, "图表", "灵敏度", "Q4")
+REPORT = FIGS
 os.makedirs(SENS, exist_ok=True)
 os.makedirs(FIGS, exist_ok=True)
 
@@ -206,7 +207,7 @@ def build_report(s1, s2):
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{../../图表/灵敏度/Q4/q4_rotation_freedom_ablation.png}
+\includegraphics[width=0.82\textwidth]{q4_rotation_freedom_ablation.png}
 \caption{旋转自由度消融}
 \end{figure}
 
@@ -226,7 +227,7 @@ def build_report(s1, s2):
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{../../图表/灵敏度/Q4/q4_size_perturbation.png}
+\includegraphics[width=0.82\textwidth]{q4_size_perturbation.png}
 \caption{模块尺寸扰动后的最小面积}
 \end{figure}
 
@@ -242,7 +243,7 @@ b4（$1\times4\to1\times5$）仍达新下界 28，其余模块扰动后超过下
 
 \end{document}
 """
-    path = os.path.join(SENS, "q4_sensitivity_report.tex")
+    path = os.path.join(REPORT, "q4_sensitivity_report.tex")
     with open(path, "w") as fh:
         fh.write(tex)
     print("  报告 ->", path)

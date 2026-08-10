@@ -23,6 +23,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 RESULTS = os.path.join(ROOT, "scan", "results", "q2")
 SENS = os.path.dirname(os.path.abspath(__file__))
 FIGS = os.path.join(ROOT, "图表", "灵敏度", "Q2")
+REPORT = FIGS
 os.makedirs(SENS, exist_ok=True)
 os.makedirs(FIGS, exist_ok=True)
 
@@ -181,7 +182,7 @@ def build_report(s1, s2, s3):
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{../../图表/灵敏度/Q2/q2_t2div_sensitivity.png}
+\includegraphics[width=0.82\textwidth]{q2_t2div_sensitivity.png}
 \caption{HPWL 随 t2-div 变化}
 \end{figure}
 
@@ -201,7 +202,7 @@ def build_report(s1, s2, s3):
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{../../图表/灵敏度/Q2/q2_dead_ratio_sensitivity.png}
+\includegraphics[width=0.82\textwidth]{q2_dead_ratio_sensitivity.png}
 \caption{HPWL 随死区比例变化}
 \end{figure}
 
@@ -220,7 +221,7 @@ def build_report(s1, s2, s3):
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{../../图表/灵敏度/Q2/q2_repeats_sensitivity.png}
+\includegraphics[width=0.82\textwidth]{q2_repeats_sensitivity.png}
 \caption{HPWL 随独立轮次变化}
 \end{figure}
 
@@ -234,7 +235,7 @@ n200/n300 在 24$\sim$32 轮仍有小幅改善（约 1$\sim$2\%）。多起点�
 
 \end{document}
 """
-    path = os.path.join(SENS, "q2_sensitivity_report.tex")
+    path = os.path.join(REPORT, "q2_sensitivity_report.tex")
     with open(path, "w") as fh:
         fh.write(tex)
     print("  报告 ->", path)
