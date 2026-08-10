@@ -256,7 +256,7 @@ c_{\text{true}} = \lambda \cdot WH + (1 - \lambda) \cdot \frac{H}{2},
 
 \subsection{参数调优}
 
-% TODO: λ 扫描与 t2-div 扫描完成后，以 scan/results/q2 更新下表。
+% 定稿（2026-08-10）：以 scan/results/q2 与 q2/output/final/q2_metrics.csv 为准。
 \subsubsection{t2-div（精修初始温度除数）}
 
 \textbf{t2-div 越大，run2 初始温度越低（更"冷"的精修）}。经参数扫描
@@ -266,22 +266,24 @@ c_{\text{true}} = \lambda \cdot WH + (1 - \lambda) \cdot \frac{H}{2},
 \begin{table}[H]
 \centering
 \small
-\caption{Q2 t2-div 扫描（HPWL 最优值，TODO：n300 新数据确认后更新）}
+\caption{Q2 t2-div 扫描（HPWL 最优值，16 轮统一协议）}
 \begin{tabular}{lcccc}
 \toprule
-芯片 & 冻结交付（t2=50） & 最优 t2 & scan 最优 HPWL & 提升 \\
+芯片 & 冻结交付（t2=50） & 最优 t2 & 最优 HPWL & 提升 \\
 \midrule
 n100 & 235183.0 & \textbf{35} & 225403.5 & $-4.16\%$ \\
 n200 & 403295.0 & \textbf{60} & 380261.0 & $-5.71\%$ \\
-n300 & 574322.5 & 50 & 542895.0 & $-5.47\%$（待确认） \\
+n300 & 574322.5 & \textbf{70} & 530944.5 & $-7.55\%$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{itemize}
-    \item 冻结交付为 t2-div = 50、8 轮；scan 为 16-30 轮 + 最优 t2；
+    \item 冻结交付为 t2-div = 50、8 轮；定稿为最优 t2-div + 16-24 轮
+    （n300 的 t2=70 位于扫描边界，赛程内未加密 80/90）；
     \item 提升来自\textbf{更多轮次 + t2 调优}共同作用；
-    \item 论文最终数值以参数定稿后的交付重跑为准。
+    \item 定稿数值经交叉核对与挂机 best 逐位一致
+    （\texttt{q2/output/final/q2\_metrics.csv}）。
 \end{itemize}
 
 \subsubsection{轮次与种子}
@@ -307,18 +309,18 @@ n300 & 574322.5 & 50 & 542895.0 & $-5.47\%$（待确认） \\
 
 \subsection{求解结果}
 
-% TODO: 参数定稿（t2-div/轮次）后，以 q2/output/q2_metrics.csv 重算更新。
+% 定稿（2026-08-10）：opt 版 + 最优 t2-div + 固定种子，与挂机 best 逐位一致。
 \begin{table}[H]
 \centering
 \small
-\caption{Q2 三芯片求解结果（冻结交付，8 轮取优，$d=0.15$）}
+\caption{Q2 三芯片定稿结果（$d=0.15$，最优 t2-div + 16-24 轮取优）}
 \begin{tabular}{lcccccc}
 \toprule
-芯片 & 轮廓 side & HPWL & 面积利用率 & 理论上限 & 耗时(s) & 合法性 \\
+芯片 & t2-div & 轮廓 side & HPWL & 面积利用率 & 理论上限 & 合法性 \\
 \midrule
-n100 & 455 & 235183.0 & 0.867 & 0.8696 & 17.0 & 合法 \\
-n200 & 450 & 403295.0 & 0.868 & 0.8696 & 257.1 & 合法 \\
-n300 & 561 & 574322.5 & 0.868 & 0.8696 & 569.3 & 合法 \\
+n100 & 35 & 455 & \textbf{225403.5} & 0.867 & 0.8696 & 合法 \\
+n200 & 60 & 450 & \textbf{380261.0} & 0.868 & 0.8696 & 合法 \\
+n300 & 70 & 561 & \textbf{530944.5} & 0.868 & 0.8696 & 合法 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -326,17 +328,22 @@ n300 & 561 & 574322.5 & 0.868 & 0.8696 & 569.3 & 合法 \\
 \begin{table}[H]
 \centering
 \small
-\caption{Q2 scan 最优参数结果（t2-div 调优 + 更多轮次，TODO 定稿后并入上表）}
+\caption{Q2 定稿 vs 冻结交付（8 轮，t2=50）的改善}
 \begin{tabular}{lcccc}
 \toprule
-芯片 & 最优 t2-div & HPWL & 较冻结提升 & 状态 \\
+芯片 & 冻结 HPWL & 定稿 HPWL & 较冻结提升 & 状态 \\
 \midrule
-n100 & 35 & 225403.5 & $-4.16\%$ & 已完成 \\
-n200 & 60 & 380261.0 & $-5.71\%$ & 已完成 \\
-n300 & 50 & 542895.0 & $-5.47\%$ & 待最终确认 \\
+n100 & 235183.0 & 225403.5 & $-4.16\%$ & 定稿 \\
+n200 & 403295.0 & 380261.0 & $-5.71\%$ & 定稿 \\
+n300 & 574322.5 & 530944.5 & $-7.55\%$ & 定稿 \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\begin{itemize}
+    \item 定稿数值经交叉核对与挂机 scan best 逐位一致；
+    \item n300 的 t2=70 位于扫描边界，赛程内未加密 80/90，如实记录。
+\end{itemize}
 
 \subsection{结果讨论}
 
