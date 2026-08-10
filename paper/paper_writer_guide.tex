@@ -1,0 +1,400 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[UTF8]{ctex}
+\usepackage{amsmath, amssymb}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{multirow}
+\usepackage{enumitem}
+\usepackage{tcolorbox}
+\usepackage{hyperref}
+
+\geometry{left=2.5cm, right=2.5cm, top=2.5cm, bottom=2.5cm}
+
+\title{\textbf{B 题论文写作总纲（论文手手册）}\\[6pt]
+\large VLSI 布图规划设计 --- 文件架构 / 材料清单 / 写作指导 / 定稿与冻结差异}
+\author{2026 年第七届"华数杯"大学生数学建模竞赛 B 题 \\ 编程手交付说明}
+\date{2026/08/10}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+% ============================================================
+\section{项目概览与最终成果}
+% ============================================================
+
+本赛题共四问，均围绕 \textbf{VLSI 布图规划}展开：前三问以
+B$^*$ 树编码 + 快速模拟退火为核心求解框架（共享一套经 1134 断言白盒
+验证的 C++ 核心），第四问为 L/T 型模块的最小包围盒穷举求解。
+
+\begin{tcolorbox}[colback=green!5, colframe=green!50!black, title=一句话结论]
+四问全部求解完成：Q1 三芯片面积较冻结基线再降 0.4$\sim$0.8\%；
+Q2 HPWL 较冻结降 4$\sim$8\%（逐芯片精修温度调参）；Q3 最小可行死区
+比例较冻结降 11$\sim$35\%（高种子判定协议）；Q4 达到总面积下界
+\textbf{24}，严格证明全局最优。所有数值经\textbf{逐位交叉核对}（定稿
+复现 $=$ 参数扫描最优），可复现、可审计。
+\end{tcolorbox}
+
+\subsection{四问定稿结论}
+
+\begin{table}[H]
+\centering
+\caption{四问定稿结论速览（详细数值见 \ref{sec:diff}）}
+\scriptsize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{llll}
+\toprule
+问 & 目标 & 定稿结论 & 关键手段 \\
+\midrule
+Q1 & 自由轮廓，面积最小 + 长宽比$\to$1 & 面积 189198 / 183112 / 285228 & $\lambda{=}0.5$，n200 用 t2-div$=$30 \\
+Q2 & 固定轮廓（d=0.15），HPWL 最小 & HPWL 225403.5 / 380261 / 530944.5 & 逐芯片 t2-div 35/60/70 \\
+Q3 & 最小可行死区比例 $d^*$ & 0.076072 / 0.084141 / 0.111773 & 判定种子 15/15/10 + 双向确认 \\
+Q4 & L/T 模块最小包围盒 & \textbf{24}（全局最优证明） & 穷举 86\,016 组合 + 下界可达 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================
+\section{文件架构全图}
+% ============================================================
+
+{\scriptsize
+\begin{verbatim}
+The_7th_Huashu_Cup.../
+|-- data/raw/                    # 原始附件 n100/n200/n300(.blocks/.nets/.pl)，只读
+|-- cpp_solver/                  # 冻结版 C++ 核心：B*-Tree + Fast-SA
+|   `-- src/                     #   floor_plan.hpp / sa.hpp / main.cpp / test_main.cpp
+|-- cpp_solver_opt/              # 优化版：vector Skyline + --t2-div（定稿数值由此产生）
+|-- common/
+|   |-- verify.py                # 独立合法性复核（无重叠/尺寸保持/越界）
+|   `-- visualize.py             # 绘图共享库
+|-- scan/                        # 参数扫描挂机工作区
+|   |-- scan.py / configs.py     # 挂机执行器与 96 配置定义
+|   |-- cross_check.py           # 定稿 vs 挂机最优 逐位交叉核对（9/9 通过）
+|   |-- test_scan.py             # 挂机程序自测（12/12）
+|   |-- results/{q1,q2,q3}/      # 每配置最优 CSV（挂机成果）
+|   `-- logs/                    # 挂机运行日志
+|-- eda/                         # 数据探索分析（8 张 EDA 图 + 统计汇总）
+|-- q1/ q2/ q3/ q4/              # 各问客制层
+|   |-- qN_solver.py             # 定稿求解脚本（--chip/--t2-div/--seeds/--outdir）
+|   |-- output/
+|   |   |-- baseline/            # 冻结版原始交付（存档）
+|   |   `-- final/               # 定稿复现（论文数值以此为准）
+|   |-- visualization/figs/
+|   |   |-- baseline/{chip}/     # 冻结版图（11-12 张/芯片）
+|   |   `-- final/{chip}/        # 定稿图（floorplan/convergence/9 快照[/bisect]）
+|   |-- qN_work_guide.tex/pdf    # 建模与求解算法文档（论文手工作稿）
+|   `-- sensitivity/             # 灵敏度分析（脚本 + S*.csv + 报告 pdf）
+|-- 做图/                        # 灵敏度图集中输出（12 张）
+|-- paper/
+|   |-- data_package/paper_values.md   # 数值速查表
+|   |-- sensitivity_analysis.tex/pdf   # 灵敏度论文章节素材
+|   `-- paper_writer_guide.tex/pdf     # 本文件
+|-- README.md                    # 项目总说明（含复现命令）
+`-- B题 VLSI布图规划设计/          # 题面与参考文献
+\end{verbatim}
+}
+
+\textbf{使用原则}：论文数值一律以 \texttt{output/final/} 与
+\texttt{paper\_values.md} 为准；\texttt{baseline/} 仅供对比与存档；
+\LaTeX 文档（work\_guide / 灵敏度报告 / 论文章节）均可直接编译、直接
+引用其中的公式与表格。
+
+% ============================================================
+\section{材料清单：编程手可提供的全部素材}
+\label{sec:materials}
+% ============================================================
+
+\subsection{数值类（论文表格直接引用）}
+
+\begin{table}[H]
+\centering
+\caption{数值材料清单}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lll}
+\toprule
+材料 & 位置 & 用途 \\
+\midrule
+Q1 定稿指标 & q1/output/final/q1\_metrics.csv & 面积/长宽比/利用率表 \\
+Q2 定稿指标 & q2/output/final/q2\_metrics.csv & HPWL/利用率表（含理论上限 0.8696） \\
+Q3 定稿指标 & q3/output/final/q3\_metrics.csv & d*/side/HPWL/确认记录 \\
+Q4 结果 & q4/output/final/q4\_result.csv & 最优布局 + 最优性证明素材 \\
+数值速查 & paper/data\_package/paper\_values.md & 全问汇总 + 复现命令溯源 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{图类（论文插图）}
+
+\begin{itemize}
+    \item \textbf{最终布图}：\texttt{qN/visualization/\allowbreak figs/final/\allowbreak<chip>/\allowbreak floorplan.png}
+    —— Q1 标注面积/长宽比，Q2 含轮廓框与 HPWL，Q3 含轮廓与 d*，Q4 见
+    \texttt{q4/visualization/\allowbreak figs/\allowbreak q4\_optimal.png}；
+    \item \textbf{收敛曲线}：\texttt{.../final/\allowbreak<chip>/\allowbreak convergence.png}
+    （best cost 随温度层下降，佐证收敛性）；
+    \item \textbf{过程快照}：\texttt{.../final/\allowbreak<chip>/\allowbreak snapshots/\allowbreak snap\_01..09.png}
+    （初始到最终的布局演化，可论证退火搜索过程）；
+    \item \textbf{二分轨迹}：Q3 专属 \texttt{.../final/\allowbreak<chip>/\allowbreak bisect.png}
+    （区间收缩 + 可行标记 + d* 标注，论证 d* 搜索）；
+    \item \textbf{灵敏度图}：\texttt{做图/*.png}（12 张，按分析内容命名）；
+    \item \textbf{EDA 图}：\texttt{eda/figs/*.png}（8 张，数据规模/尺寸分布/线网统计）。
+\end{itemize}
+
+\subsection{文档类（写作参考与直接素材）}
+
+\begin{itemize}
+    \item \textbf{qN\_work\_guide.pdf}（10/10/7 页）：论文手工作稿——
+    问题重述（满页）、模型建立（决策变量/约束/目标函数全公式）、
+    求解算法（编码/解码/扰动/退火/复杂度）、结果与验证。\textbf{写作时
+    可按其中公式与结构直接组织论文章节}；
+    \item \textbf{qN/sensitivity/qN\_sensitivity\_report.pdf}：各问
+    灵敏度分析报告（参数曲线 + 结论）；
+    \item \textbf{paper/sensitivity\_analysis.pdf}（12 页）：论文
+    "参数灵敏度分析"章节的现成成稿（12 图 + 分析文字 + 参数选择汇总表）；
+    \item \textbf{README.md}：项目总说明（编译/复现/交叉核对命令）。
+\end{itemize}
+
+\subsection{验证与可靠性材料（论文"模型检验"节素材）}
+
+\begin{itemize}
+    \item \textbf{独立性合法性复核}：所有定稿布局经独立 Python 实现
+    复核（模块数/两两无重叠/尺寸保持/不越界），三芯片全部通过
+    （\texttt{common/verify.py}，指标 CSV 中 \texttt{legal=True}）；
+    \item \textbf{逐位交叉核对}：定稿复现与参数扫描最优值 9/9 逐位一致
+    （\texttt{scan/cross\_check.py}，确定性种子保证）；
+    \item \textbf{白盒测试}：共享 C++ 核心 1134 断言 + ASan/UBSan 双轨
+    （含独立参考解码器、穷举全树形、独立 HPWL oracle）；
+    \item \textbf{种子协议}：全部运行固定种子（\texttt{seed\_base=20260808}
+    + 轮次偏移），任意结果可精确复现。
+\end{itemize}
+
+% ============================================================
+\section{写作指导：按章节的素材对应}
+% ============================================================
+
+\subsection{摘要与问题重述}
+
+\begin{itemize}
+    \item 背景：VLSI 布图规划在物理设计流程中的位置（综合与布线之间，
+    决定面积/线长/可布线性）——可参考各 work\_guide 问题重述开篇；
+    \item 四问文字重述：work\_guide 第一节"问题重述"已按论文级写成
+    （每问满一页），可直接采用；
+    \item 摘要数值：四问定稿结论表（\ref{sec:diff}）。
+\end{itemize}
+
+\subsection{问题分析}
+
+素材：各 work\_guide"问题分析"——Q1 组合爆炸（$C_n\cdot n!\cdot2^n$
+规模论证）、Q2 紧轮廓多起点必要性（8 轮 HPWL 分布方差数据）、
+Q3 判定假阴性（单种子 0.142 反例）、Q4 模型修正四条论证。
+
+\subsection{模型建立}
+
+\begin{itemize}
+    \item \textbf{Q1}：B$^*$ 树编码（左子紧贴父右、右子与父左对齐、
+    轮廓压缩解码天然无重叠）；目标
+    $f = \lambda A/\bar A + (1-\lambda)P(R)/\bar P$，
+    $P(R)=R+1/R-2$（旋转对称性），$\lambda=0.5$（扫描确定）；
+    \item \textbf{Q2}：HPWL 定义（引脚中心：块 $2x+w$、终端 $2x$）；
+    固定轮廓 $\text{side}=\lceil\sqrt{\Sigma A(1+d)}\rceil$，$d=0.15$；
+    面积利用率上界 $1/(1+d)=0.8696$（实测 0.867$\sim$0.868，差距 $<0.3\%$）；
+    \item \textbf{Q3}：可行集单调性（$d\uparrow \Rightarrow \text{side}
+    \uparrow \Rightarrow$ 可行域扩大）$\Rightarrow$ 二分适用；
+    判定假阴性 $\Rightarrow$ 并行多种子 OR 语义
+    （$P \approx \prod P_s$ 指数下降）+ 双向确认；
+    \item \textbf{Q4}：矩形分解（超块）、凹角精确支撑
+    $y=\max_i(\text{support}(R_i)-y_i)$、四向旋转；下界 $=24$ 可达
+    $\Rightarrow$ 全局最优。
+\end{itemize}
+
+\subsection{求解算法}
+
+素材：work\_guide 第二章（B$^*$ 树 / Skyline 解码 / 三扰动算子概率表 /
+自适应冷却 $T_k = T_0\bar{|\Delta|}_k/(ck)$ / Metropolis 接受准则 /
+reheating / 多起点取优 / 复杂度分析）。Q3 二分 + 双向确认流程、
+Q4 穷举框架与最优性证明（下界可达性）均可直接引用。
+
+\subsection{结果与分析}
+
+\begin{itemize}
+    \item 四问结果表（\ref{sec:diff} 的定稿列）；
+    \item 结果讨论素材：Q1 利用率 $>94\%$ 接近工程极限、死区量化；
+    Q2 利用率逼近理论上限 0.8696；Q3 全部双向确认通过；
+    Q4 达到下界（完美铺满）且 bbox 对照版 32 证明凹角支撑省 25\%；
+    \item \textbf{模型检验}：见 \ref{sec:materials} 第 4 小节
+    （合法性复核 / 交叉核对 / 断言测试 / 种子复现）。
+\end{itemize}
+
+\subsection{灵敏度分析}
+
+直接采用 \texttt{paper/sensitivity\_analysis.pdf}（12 页成稿）：
+$\lambda$ 谷底 0.5、t2-div 逐芯片漂移（35/60/70）、死区比例单调性、
+判定种子强度效应（种子 3$\to$15 改善 35$\sim$45\%）、旋转/尺寸扰动。
+每节含图 + 定量结论 + 与参数选择的联系。
+
+\subsection{模型评价}
+
+\textbf{优点}：表示完备（B$^*$ 树一一对应）、解码天然合法、
+目标与搜索框架解耦（Q1$\sim$Q3 复用）、可复现（固定种子）、
+可扩展（Q4 大规模实例沿用同一框架）。
+
+\textbf{已知限制（如实写入，见 \ref{sec:limits}）}：Q1/Q2/Q3 为
+启发式（best-of-N，轮间方差）；Q3 的 $d^*$ 与搜索强度相关；
+Q2/Q1 部分参数位于扫描边界未加密；Q4 最优性依赖穷举（仅 4 模块实例
+成立）。
+
+% ============================================================
+\section{定稿与冻结差异}
+\label{sec:diff}
+% ============================================================
+
+\subsection{数值对比总表}
+
+\begin{table}[H]
+\centering
+\small
+\caption{定稿 vs 冻结：全问数值对比（冻结 = cpp\_solver 原交付基线；定稿 = opt 版 + 参数调优）}
+\begin{tabular}{lcccccc}
+\toprule
+问 & 芯片 & 冻结值 & 定稿值 & 提升 & 差异来源 \\
+\midrule
+Q1 面积 & n100 & 189198 & 189198 & $0\%$ & 已到最优 \\
+Q1 面积 & n200 & 183840 & \textbf{183112} & $-0.40\%$ & t2-div 20$\to$30 \\
+Q1 面积 & n300 & 287448 & \textbf{285228} & $-0.77\%$ & 轮次 3$\to$24 \\
+\midrule
+Q2 HPWL & n100 & 235183.0 & \textbf{225403.5} & $-4.16\%$ & t2-div 50$\to$35、轮次 $\uparrow$ \\
+Q2 HPWL & n200 & 403295.0 & \textbf{380261.0} & $-5.71\%$ & t2-div 50$\to$60、轮次 $\uparrow$ \\
+Q2 HPWL & n300 & 574322.5 & \textbf{530944.5} & $-7.55\%$ & t2-div 50$\to$70、轮次 $\uparrow$ \\
+\midrule
+Q3 $d^*$ & n100 & 0.117307 & \textbf{0.076072} & $-35.2\%$ & 判定种子 3$\to$15 \\
+Q3 $d^*$ & n200 & 0.108977 & \textbf{0.084141} & $-22.8\%$ & 判定种子 3$\to$15 \\
+Q3 $d^*$ & n300 & 0.124885 & \textbf{0.111773} & $-10.5\%$ & 判定种子 3$\to$10 \\
+\midrule
+Q4 面积 & --- & 24 & 24 & $0\%$ & 全局最优（穷举证明） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{定稿完整数值表（论文可直接引用）}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Q1 定稿（$\lambda=0.5$，n200 取 t2-div=30，固定种子多轮取优）}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lccccccc}
+\toprule
+芯片 & 参数 & 轮廓 $W\times H$ & 面积 $A$ & 面积利用率 & 长宽比 $R$ & 死区比例 & 耗时(s) \\
+\midrule
+n100 & t2=20, 8轮 & $414\times457$ & 189198 & 0.9487 & 1.104 & 5.13\% & 0.8 \\
+n200 & t2=30, 24轮 & $376\times487$ & 183112 & 0.9595 & 1.295 & 4.05\% & 11.4 \\
+n300 & t2=20, 24轮 & $417\times684$ & 285228 & 0.9577 & 1.640 & 4.23\% & 19.3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Q2 定稿（$d=0.15$，逐芯片 t2-div，利用率上界 $1/1.15=0.8696$）}
+\begin{tabular}{lcccccc}
+\toprule
+芯片 & t2-div & 轮廓 side & HPWL & 面积利用率 & 距上界 & 耗时(s) \\
+\midrule
+n100 & 35 & 455 & \textbf{225403.5} & 0.867 & $<0.3\%$ & 6.1 \\
+n200 & 60 & 450 & \textbf{380261.0} & 0.8676 & $<0.3\%$ & 93.3 \\
+n300 & 70 & 561 & \textbf{530944.5} & 0.868 & $<0.3\%$ & 502.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Q3 定稿（判定种子 15/15/10，双向确认全部通过）}
+\begin{tabular}{lccccc}
+\toprule
+芯片 & 判定种子 & $d^*$ & 轮廓 side & $d^*$ 处 HPWL & 确认 \\
+\midrule
+n100 & 15 & \textbf{0.076072} & 440 & 288184.0 & 通过 \\
+n200 & 15 & \textbf{0.084141} & 437 & 559042.5 & 通过 \\
+n300 & 10 & \textbf{0.111773} & 552 & 826375.0 & 通过 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Q4 定稿（穷举 86\,016 组合，全部矩形级重叠检查通过）}
+\begin{tabular}{ll}
+\toprule
+指标 & 值 \\
+\midrule
+最小包围盒面积 & \textbf{24} = 模块总面积下界（全局最优证明） \\
+包围盒 & $4\times6$（b3: 0°@(0,0)；b1: 270°@(0,0)；b2: 270°@(0,3)；b4: 90°@(0,5)） \\
+bbox 放置对照 & 32（凹角精确支撑节省 25\%） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{差异的技术解释（写作素材）}
+
+\begin{enumerate}
+    \item \textbf{Q2/Q1 的 t2-div 调参}：run2 精修初始温度
+    $T_0/\text{t2-div}$ 控制局部搜索"冷热"。经 9 点扫描，最优值
+    \textbf{随芯片漂移}（n100=35、n200=60、n300=70；Q1 的 n200=30），
+    固定全局参数损失 4$\sim$6\% 收益；
+    \item \textbf{Q3 判定种子}：$d^*$ 与搜索强度强相关（判定种子
+    3$\to$15 时 n100 由 0.1348 降至 0.0761，改善 45\%）。定稿采用
+    高种子协议，论文表述须注明"\textbf{$d^*$ 是在当前搜索强度下
+    验证过的最小可行死区比例}"；
+    \item \textbf{Q1 长宽比变化}：面积优先标准下，n200/n300 面积
+    更优但长宽比放宽（n300 达 1.64）——符合题目"面积相同再比长宽比"
+    的验证标准；
+    \item \textbf{Q4 无差异}：穷举确定性求解，冻结即全局最优。
+\end{enumerate}
+
+% ============================================================
+\section{已知限制与表述注意}
+\label{sec:limits}
+% ============================================================
+
+\begin{enumerate}
+    \item \textbf{启发式方差}：Q1/Q2/Q3 为多起点 best-of-N，轮间
+    存在方差（Q2 实测 8 轮 min/中位比 1.3$\sim$1.46），论文表述
+    "多轮取优"而非"单次最优"；
+    \item \textbf{搜索强度相关}：Q3 的 $d^*$ 依赖判定种子数，须限定
+    表述；n300 的 seed15/20 因赛程时间未扫描（当前 10 种子为定稿）；
+    \item \textbf{参数边界}：Q2 的 n300 t2-div=70、Q1 的 n200 t2-div=30
+    位于扫描范围边界（赛程内未加密 40/50/60 与 80/90），如实记录
+    "扫描范围最优"；
+    \item \textbf{--log 修复说明}：求解器快照逻辑曾导致带 \texttt{--log}
+    运行与无 log 结果偏移（已修复并验证逐位一致）。冻结版 baseline
+    数值为修复前日志版，\textbf{论文数值一律以定稿 final 为准}；
+    \item \textbf{Q4 最优性范围}：穷举证明仅对本题 4 模块实例成立，
+    大规模 L/T 实例沿用框架但为启发式。
+\end{enumerate}
+
+% ============================================================
+\section{复现与可审计性声明（论文附录素材）}
+% ============================================================
+
+\begin{itemize}
+    \item \textbf{确定性}：全部运行固定种子
+    （\texttt{seed\_base = 20260808} + 轮次偏移），同参数同种子结果
+    逐位一致；
+    \item \textbf{交叉核对}：定稿复现值与参数扫描最优值 9/9 逐位一致
+    （\texttt{scan/cross\_check.py}）；
+    \item \textbf{合法性复核}：全部定稿布局经独立 Python 复核
+    （无重叠/尺寸保持/不越界）；
+    \item \textbf{测试}：共享核心 1134 断言 + ASan/UBSan；
+    \item \textbf{复现命令}：见 README.md 与 paper\_values.md
+    （逐芯片命令含参数与输出目录）。
+\end{itemize}
+
+\end{document}
