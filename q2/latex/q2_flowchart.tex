@@ -1,0 +1,49 @@
+\documentclass[tikz,border=10pt]{standalone}
+\usepackage[UTF8]{ctex}
+\usepackage{amsmath}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric}
+
+\tikzset{
+  box/.style={draw=black, rectangle, text width=6.4cm, align=center,
+              minimum height=0.9cm, inner sep=4pt},
+  dec/.style={draw=black, diamond, text width=4.6cm, align=center, aspect=2.2,
+              inner sep=1pt},
+  term/.style={draw=black, rounded corners=6pt, text width=5.6cm, align=center,
+               minimum height=0.9cm, inner sep=4pt},
+  arrow/.style={-{Stealth[length=3mm]}, thick},
+  node distance=1.0cm,
+}
+
+\begin{document}
+\begin{tikzpicture}
+\node[term] (s) {开始：输入 \texttt{.blocks}/\texttt{.nets}/\texttt{.pl}};
+\node[box, below=of s] (a) {固定正方形轮廓
+$\text{side} = \lceil\sqrt{\Sigma A\,(1+d)}\rceil$，$d=0.15$，
+利用率上界 $1/1.15=0.8696$};
+\node[box, below=of a] (b) {\textbf{run 阶段}（可行性搜索）：自适应
+$\alpha$ 混合代价 + 轮廓压力，把布局压入轮廓};
+\node[dec, below=of b] (c) {找到可行解（$W\le\text{side}$ 且
+$H\le\text{side}$）？};
+\node[box, below=of c] (d) {\textbf{run2 阶段}（精修）：低温
+$T_0/\text{t2-div}$，以 HPWL 为主代价快速下山};
+\node[box, below=of d] (e) {多起点并行：每轮独立随机种子，
+独立完整退火};
+\node[dec, below=of e] (f) {轮次可行（bbox $\le$ side）？};
+\node[box, below right=1.2cm and -0.3cm of f] (g) {丢弃该轮};
+\node[box, below=of f] (h) {计入候选，取 HPWL 最小为 best};
+\node[box, below=of h] (i) {合法性复核（无重叠/尺寸保持/不越界）
+$\to$ 输出定稿布局};
+
+\draw[arrow] (s) -- (a);
+\draw[arrow] (a) -- (b);
+\draw[arrow] (b) -- (c);
+\draw[arrow] (c) -- node[right,font=\small] {否：重置温度重搜} (b);
+\draw[arrow] (c) -- node[right,font=\small] {是} (d);
+\draw[arrow] (d) -- (e);
+\draw[arrow] (e) -- (f);
+\draw[arrow] (f) -- node[above,font=\small] {否} (g);
+\draw[arrow] (f) -- node[right,font=\small] {是} (h);
+\draw[arrow] (g) |- (i);
+\draw[arrow] (h) -- (i);
+\end{tikzpicture}
+\end{document}

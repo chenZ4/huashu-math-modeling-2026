@@ -1,0 +1,52 @@
+\documentclass[tikz,border=10pt]{standalone}
+\usepackage[UTF8]{ctex}
+\usepackage{amsmath}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric}
+
+\tikzset{
+  box/.style={draw=black, rectangle, text width=6.4cm, align=center,
+              minimum height=0.9cm, inner sep=4pt},
+  dec/.style={draw=black, diamond, text width=4.8cm, align=center, aspect=2.2,
+              inner sep=1pt},
+  term/.style={draw=black, rounded corners=6pt, text width=5.6cm, align=center,
+               minimum height=0.9cm, inner sep=4pt},
+  arrow/.style={-{Stealth[length=3mm]}, thick},
+  node distance=1.0cm,
+}
+
+\begin{document}
+\begin{tikzpicture}
+\node[term] (s) {开始：4 个模块（T 型 b1、L 型 b2、矩形 b3/b4），
+允许 $0^\circ/90^\circ/180^\circ/270^\circ$ 旋转};
+\node[box, below=of s] (a) {模型修正：\textbf{矩形分解}——模块表示为
+固定相对位置的矩形并集（超块），总面积下界 $\Sigma A = 24$};
+\node[box, below=of a] (b) {预计算四向旋转坐标（角点变换
+$(x,y)\mapsto(-y,x)$ + 归一化平移）};
+\node[box, below=of b] (c) {穷举空间：14 树形 $\times$ 24 排列
+$\times$ 256 旋转 $= 86\,016$ 组合};
+\node[box, below=of c] (d) {超块解码：$x$ 由树关系确定，
+$y = \max_i\big(\text{support}(R_i) - y_i\big)$（凹角精确支撑）};
+\node[dec, below=of d] (e) {矩形级无重叠？};
+\node[box, below right=1.3cm and -0.2cm of e] (f) {丢弃该组合};
+\node[box, below=of e] (g) {更新最小面积 best（断言
+$\text{best} \ge \Sigma A = 24$），记录布局};
+\node[dec, below=of g] (h) {穷举完成？};
+\node[box, below=of h] (i) {$\text{best} = 24 =$ 下界
+$\Rightarrow$ \textbf{全局最优证明}（下界可达）};
+\node[term, below=of i] (t) {输出最优布局：包围盒 $4\times6$、
+各模块旋转角与坐标};
+
+\draw[arrow] (s) -- (a);
+\draw[arrow] (a) -- (b);
+\draw[arrow] (b) -- (c);
+\draw[arrow] (c) -- (d);
+\draw[arrow] (d) -- (e);
+\draw[arrow] (e) -- node[above,font=\small] {否} (f);
+\draw[arrow] (e) -- node[right,font=\small] {是} (g);
+\draw[arrow] (f) |- (h);
+\draw[arrow] (g) -- (h);
+\draw[arrow] (h) -- node[right,font=\small] {否} (c);
+\draw[arrow] (h) -- node[right,font=\small] {是} (i);
+\draw[arrow] (i) -- (t);
+\end{tikzpicture}
+\end{document}

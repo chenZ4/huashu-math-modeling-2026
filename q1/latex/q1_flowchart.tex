@@ -1,0 +1,59 @@
+\documentclass[tikz,border=10pt]{standalone}
+\usepackage[UTF8]{ctex}
+\usepackage{amsmath}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric}
+
+\tikzset{
+  box/.style={draw=black, rectangle, text width=6.4cm, align=center,
+              minimum height=0.9cm, inner sep=4pt},
+  dec/.style={draw=black, diamond, text width=4.6cm, align=center, aspect=2.2,
+              inner sep=1pt},
+  term/.style={draw=black, rounded corners=6pt, text width=5.6cm, align=center,
+               minimum height=0.9cm, inner sep=4pt},
+  arrow/.style={-{Stealth[length=3mm]}, thick},
+  node distance=1.0cm,
+}
+
+\begin{document}
+\begin{tikzpicture}
+\node[term] (s) {开始：输入三芯片 \texttt{.blocks} 模块数据};
+\node[box, below=of s] (a) {问题分析：二维矩形装箱，NP-hard，
+搜索空间组合爆炸 $\Rightarrow$ 需结构化编码表示};
+\node[box, below=of a] (b) {B$^*$-Tree 编码：合法布局与有序二叉树
+\textbf{一一对应}（完备性）};
+\node[box, below=of b] (c) {Skyline 轮廓压缩解码：左子紧贴父右、
+右子与父左对齐，\textbf{天然无重叠}};
+\node[box, below=of c] (d) {目标函数：$f = \lambda\frac{A}{\bar A}
++ (1-\lambda)\frac{P(R)}{\bar P}$，$P(R)=R+1/R-2$，$\lambda=0.5$};
+\node[box, below=of d] (e) {快速模拟退火：扰动（旋转/删除-插入/交换）
+$\to$ 解码 $\to$ 代价评估};
+\node[dec, below=of e] (f) {Metropolis 接受：$\Delta\le0$ 或
+$\xi<e^{-\Delta/T}$？};
+\node[box, below left=1.2cm and 0.2cm of f] (g) {接受：更新当前解
+与历史最优};
+\node[box, below right=1.2cm and 0.2cm of f] (h) {拒绝：回滚拓扑};
+\node[box, below=of g] (i) {自适应降温 $T_k = T_0\frac{\bar{|\Delta|}_k}{c k}$
++ 停滞重置（reheating）};
+\node[dec, below=of i] (j) {达到终止条件（温度下界/高拒绝率/
+重置超限）？};
+\node[box, below=of j] (k) {多起点 $N$ 轮独立搜索，
+$(A, R)$ 字典序取最优};
+\node[box, below=of k] (l) {合法性复核（无重叠/尺寸保持）
+$\to$ 输出定稿布局};
+
+\draw[arrow] (s) -- (a);
+\draw[arrow] (a) -- (b);
+\draw[arrow] (b) -- (c);
+\draw[arrow] (c) -- (d);
+\draw[arrow] (d) -- (e);
+\draw[arrow] (e) -- (f);
+\draw[arrow] (f) -- node[left,font=\small] {是} (g);
+\draw[arrow] (f) -- node[right,font=\small] {否} (h);
+\draw[arrow] (h) |- (e);
+\draw[arrow] (g) -- (i);
+\draw[arrow] (i) -- (j);
+\draw[arrow] (j) -- node[right,font=\small] {否} (e);
+\draw[arrow] (j) -- node[right,font=\small] {是} (k);
+\draw[arrow] (k) -- (l);
+\end{tikzpicture}
+\end{document}
