@@ -1,0 +1,4 @@
+chip,n_blocks,area_cv,area_ratio_max_min,aspect_gt3,aspect_gt3_pct
+n100,100,0.4977,11.6x,6,6.0%
+n200,200,0.5415,14.5x,8,4.0%
+n300,300,0.5276,14.5x,10,3.3%

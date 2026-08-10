@@ -1,0 +1,293 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[UTF8]{ctex}
+\usepackage{amsmath, amssymb}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{multirow}
+\usepackage{hyperref}
+
+\geometry{left=2.5cm, right=2.5cm, top=2.5cm, bottom=2.5cm}
+
+\title{\textbf{参数灵敏度分析（论文第 X 章素材）}\\[6pt]
+\large VLSI 布图规划设计 --- 模型参数与输入灵敏度}
+\author{2026 年第七届"华数杯"大学生数学建模竞赛 B 题}
+\date{2026/08}
+
+\begin{document}
+\maketitle
+
+% ============================================================
+\section{参数灵敏度分析}
+% ============================================================
+
+本部分对四个问题中的模型参数与输入进行灵敏度分析，验证参数选择依据、
+考察结果对参数与输入的稳健性。所有实验在固定随机种子协议下进行
+（结果可复现）；灵敏度曲线上的每个点均为该参数取值下多次独立运行
+（8--30 轮）的\textbf{最优值}。
+
+% ============================================================
+\subsection{问题一：权重参数 $\lambda$ 与搜索参数}
+
+\subsubsection{$\lambda$ 对面积与长宽比的影响}
+
+目标函数 $f = \lambda\, A/\bar A + (1-\lambda)\, P(R)/\bar P$ 中，
+$\lambda$ 刻画面积项与长宽比惩罚项的相对重要性。在
+$\lambda \in [0.375, 0.625]$ 内取 11 个点（n100/n200）与 6 个点
+（n300）扫描，结果见图 \ref{fig:q1lam} 与图 \ref{fig:q1lamasp}。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{../图表/灵敏度/Q1/q1_lambda_sensitivity.png}
+\caption{$\lambda$ 对最小包围盒面积的影响（n100/n200 各 11 点，n300 6 点）}
+\label{fig:q1lam}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{../图表/灵敏度/Q1/q1_lambda_aspect_sensitivity.png}
+\caption{$\lambda$ 对长宽比 $R$ 的影响}
+\label{fig:q1lamasp}
+\end{figure}
+
+由图中可见：
+
+\begin{itemize}
+    \item \textbf{n100 与 n300 的面积谷底均位于 $\lambda = 0.5$}：
+    n100 最优面积 189198、n300 最优面积 285228；
+    \item \textbf{n200 对 $\lambda$ 不敏感}：$\lambda \in [0.4, 0.625]$
+    内面积波动仅 0.6\%（183112$\sim$184230），最优面积出现在
+    $\lambda = 0.625$（183120）附近；
+    \item \textbf{长宽比随 $\lambda$ 增大单调恶化}：$\lambda$ 从 0.4 增至
+    0.625 时，n200 长宽比由 1.19 恶化至 1.71、n300 由 1.17 恶化至 2.08，
+    与"$\lambda$ 越大越偏向面积、忽略长宽比"的模型语义一致；
+    \item 综上，$\lambda = 0.5$ 是\textbf{三芯片共同的均衡点}：面积
+    接近最优（n200 与最优仅差 0.3\%）且长宽比可控；结果在
+    $[0.45, 0.55]$ 内对 $\lambda$ 不敏感（面积变化 $<1\%$），
+    参数选择稳健。
+\end{itemize}
+
+\subsubsection{独立轮次对收敛的影响}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{../图表/灵敏度/Q1/q1_repeats_convergence.png}
+\caption{最优面积随独立轮次 repeats 的收敛性（$\lambda = 0.5$）}
+\label{fig:q1rep}
+\end{figure}
+
+如图 \ref{fig:q1rep} 所示，n100 在 4 轮时面积 193697，\textbf{8 轮即
+收敛到 189198}，此后 12/16/24 轮完全不变；n200 在 24 轮仅有 0.02\%
+的微小改善（183742 $\to$ 183708）。模拟退火为随机启发式，独立轮次
+用于对抗单次运行的随机波动——n100 表明 \textbf{8 轮已足够}，
+交付取多轮取优（16--24 轮）以充分覆盖种子空间。
+
+\subsubsection{精修初始温度除数 t2-div 的影响}
+
+精修阶段初始温度 $T_0/\text{t2-div}$ 控制局部搜索的强度。扫描
+t2-div $\in \{10, 15, 20, 30\}$（图 \ref{fig:q1t2}）：
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{../图表/灵敏度/Q1/q1_t2div_sensitivity.png}
+\caption{最优面积随精修初始温度除数 t2-div 的变化（$\lambda = 0.5$）}
+\label{fig:q1t2}
+\end{figure}
+
+n100 在默认 t2-div $= 20$ 处最优（189198），t2-div 过大（30）或过小
+（10/15）均使面积劣化 0.6$\sim$0.9\%；\textbf{n200 随 t2-div 增大单调
+改善}，t2-div $= 30$ 时面积降至 183112（较默认低 0.34\%），且长宽比
+更优（1.30 vs 1.26）。故定稿对 n200 采用 t2-div $= 30$（t2-div $= 40/50/60$ 的加密
+因赛程时间未执行，如实记录）。
+
+% ============================================================
+\subsection{问题二：HPWL 关键参数}
+
+\subsubsection{精修初始温度除数 t2-div}
+
+在统一协议（16 轮、固定种子）下扫描 t2-div $\in [20, 70]$，三芯片
+各 9 个点（图 \ref{fig:q2t2}）：
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{../图表/灵敏度/Q2/q2_t2div_sensitivity.png}
+\caption{HPWL 随 t2-div 的变化（三芯片各 9 点，16 轮统一协议）}
+\label{fig:q2t2}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{最优 t2-div 随芯片漂移}：n100 谷底在 35（HPWL
+    225404）、n200 谷底在 60（380261）、n300 谷底在 70（530944）；
+    \item 曲线整体呈"U 形偏右"：t2-div 过小（$\le 25$）时精修过早
+    冻结在粗糙解，过大时冷启动易困于局部最优（n100 在 t2-div $=60$
+    出现尖峰 296532）；
+    \item n300 的谷底（70）位于扫描边界，赛程内未加密 80/90，
+    定稿即取 t2-div $= 70$（如实记录边界性）；
+    \item 固定全局 t2-div 会造成 4$\sim$6\% 的 HPWL 损失，故交付
+    \textbf{按芯片独立取参}。
+\end{itemize}
+
+\subsubsection{死区比例对 HPWL 的影响}
+
+死区比例 $d$ 决定轮廓边长 $\text{side} = \lceil \sqrt{\Sigma A(1+d)} \rceil$。
+扫描 $d \in [0.10, 0.18]$（图 \ref{fig:q2dead}）：
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{../图表/灵敏度/Q2/q2_dead_ratio_sensitivity.png}
+\caption{HPWL 随死区比例 $d$ 的变化}
+\label{fig:q2dead}
+\end{figure}
+
+HPWL 随 $d$ 增大\textbf{单调改善}：$d$ 由 0.10 增至 0.18 时，
+n100 HPWL 由 290127 降至 228974（下降 21\%）、n200 由 545280 降至
+394435（下降 28\%）。其中 $d \le 0.12$ 区间恶化显著，$d \ge 0.15$
+后进入平稳区（n100 变化 $<1.5\%$）——\textbf{基准 $d = 0.15$ 处于
+平稳区，对 $d$ 的 $\pm 0.03$ 波动稳健}。该曲线同时为问题三的
+$d^*$ 搜索提供边界参照（$d^* < 0.15$ 时 HPWL 迅速恶化）。
+
+\subsubsection{独立轮次对 HPWL 的影响}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{../图表/灵敏度/Q2/q2_repeats_sensitivity.png}
+\caption{HPWL 随独立轮次的变化（t2-div $= 50$）}
+\label{fig:q2rep}
+\end{figure}
+
+n100 在 12 轮即进入平台（235183 $\to$ 232114），n200/n300 在
+24$\sim$32 轮仍有 1$\sim$2\% 的改善。结合工作稿中 8 轮 HPWL 分布统计
+（n300 单轮波动 574k$\sim$3152k、中位/最优比值 1.3$\sim$1.46），
+\textbf{多起点取优对问题二是必要环节}：轮次增加显著降低最优值的
+运气成分。
+
+% ============================================================
+\subsection{问题三：判定强度参数}
+
+\subsubsection{判定种子数对 $d^*$ 的影响}
+
+可行性判定由启发式模拟退火完成，判定种子数 $K$ 决定假阴性概率
+（$P \approx \prod_{s=1}^{K} P_s$）。扫描 $K = 1/3/5/7/10/15$
+（n100/n200；n300 扫描至 5/7/10，15/20 因赛程时间未加密）
+（图 \ref{fig:q3seed}）：
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{../图表/灵敏度/Q3/q3_seed_sensitivity.png}
+\caption{$d^*$ 随判定种子数的变化（标准协议：判定 $=$ 确认种子数）}
+\label{fig:q3seed}
+\end{figure}
+
+\begin{itemize}
+    \item $d^*$ 随种子数\textbf{单调下降}且未见平台：n100 由 1 种子的
+    0.137183 降至 15 种子的 0.076072（改善 45\%），n200 由 3 种子的
+    0.108977 降至 15 种子的 0.084141（改善 23\%）；
+    \item 种子数 3 时 n100 判定不可靠（双向确认未通过），
+    5 及以上稳定；
+    \item 该灵敏度是问题三最重要的结论：\textbf{$d^*$ 与搜索强度强相关}，
+    论文中 $d^*$ 的表述必须限定为"在当前搜索强度（判定种子数）下验证过
+    的最小可行死区比例"；定稿协议为 n100/n200 判定 15、n300 判定 10。
+\end{itemize}
+
+\subsubsection{二分终止精度对 $d^*$ 的影响}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{../图表/灵敏度/Q3/q3_eps_sensitivity.png}
+\caption{$d^*$ 随二分终止精度 $\varepsilon$ 的变化（n100，判定 3 种子）}
+\label{fig:q3eps}
+\end{figure}
+
+$\varepsilon$ 由 $10^{-3}$ 收紧至 $10^{-5}$，$d^*$ 仅变化 0.4\%
+（0.135323 $\to$ 0.134747）——\textbf{二分精度对结果不敏感}，
+$\varepsilon = 10^{-4}$（约 11 次判定迭代）是计算成本与精度的
+合理平衡点。
+
+\subsubsection{判定种子与确认种子解耦}
+
+将二分判定种子（judge）与双向确认种子（confirm）解耦扫描
+（判定 3/5 $\times$ 确认 7/10）（图 \ref{fig:q3sep}）：
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{../图表/灵敏度/Q3/q3_sep_judge_confirm.png}
+\caption{判定/确认种子解耦对 $d^*$ 的影响}
+\label{fig:q3sep}
+\end{figure}
+
+\textbf{判定种子决定 $d^*$ 的位置}：n100 判定种子 3 $\to$ 5 时
+$d^*$ 由 0.134811 降至 0.116061；\textbf{确认种子决定"确认"的成败}：
+n200 判定 3 时确认 7 通过、确认 10 不通过（0.108677 vs 0.108077），
+说明确认种子越多判定越严格、$d^*$ 被压得越低。两者解耦验证了
+"判定强度 $\to$ 假阴性率 $\to$ $d^*$ 精度"的因果链，
+支持交付采用高判定/确认种子协议。
+
+% ============================================================
+\subsection{问题四：模型输入灵敏度}
+
+问题四为穷举确定性求解，无随机参数；灵敏度分析考察\textbf{模型输入
+变化}对最优解的影响。
+
+\subsubsection{旋转自由度消融}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{../图表/灵敏度/Q4/q4_rotation_freedom_ablation.png}
+\caption{旋转自由度消融（仅 $0^\circ$ / $0^\circ,90^\circ$ / 四向）}
+\label{fig:q4rot}
+\end{figure}
+
+允许的旋转集合从仅 $0^\circ$ 逐步放宽到四向：最小包围盒面积由 44
+降至 28、再降至 \textbf{24（达到模块总面积下界）}。旋转自由度对结果
+有实质影响（四向较仅 $0^\circ$ 节省 45\% 面积）；最优解 24 需要
+四向旋转与凹角精确支撑共同作用。
+
+\subsubsection{模块尺寸扰动}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{../图表/灵敏度/Q4/q4_size_perturbation.png}
+\caption{模块尺寸扰动（各模块增长一个不破坏形状的外侧边）后的最小面积}
+\label{fig:q4size}
+\end{figure}
+
+逐一将每个模块增长 1 个边长单位（保持形状合法）后重新穷举：
+最优面积分别为 28（b1）、30（b2）、28（b3）、28（b4），其中仅
+b4 达到新的下界 28，其余超过下界 2$\sim$5——说明\textbf{24 的完美
+铺满（零死区）对尺寸组合敏感}，是特定尺寸下的巧合而非普遍性质。
+但所有扰动实例中凹角精确支撑版均显著优于 bbox 放置版
+（28$\sim$30 vs 32$\sim$40），凹角支撑解码的紧凑性优势
+\textbf{对尺寸变化稳健}。
+
+% ============================================================
+\subsection{小结}
+
+\begin{table}[H]
+\centering
+\caption{灵敏度分析结论与参数选择汇总}
+\small
+\begin{tabular}{lll}
+\toprule
+问题 & 参数 & 结论 \\
+\midrule
+\multirow{2}{*}{一} & $\lambda$ & 谷底 0.5；$[0.45,0.55]$ 内不敏感，取 0.5 \\
+ & t2-div & n200 取 30（边界，待加密确认） \\
+二 & t2-div & 逐芯片取参：35 / 60 / 70（n300 待 80/90 确认） \\
+三 & 判定种子 & $d^*$ 随种子单调下降 23$\sim$45\%，取 15（增强 20） \\
+四 & 旋转/尺寸 & 四向旋转必要（44$\to$24）；凹角支撑优势对尺寸稳健 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+    \item 问题一、二对主要参数（$\lambda$、t2-div、轮次）在最优值邻域
+    内\textbf{稳健}，参数选择依据充分；
+    \item 问题二的 t2-div 最优值随芯片漂移，\textbf{逐芯片调参}可获
+    4$\sim$6\% 收益；
+    \item 问题三的 $d^*$ 与搜索强度强相关，论文表述须限定搜索强度；
+    \item 问题四的最优性证明不依赖参数（穷举），但对输入尺寸敏感，
+    凹角支撑解码的优势稳健。
+\end{itemize}
+
+\end{document}

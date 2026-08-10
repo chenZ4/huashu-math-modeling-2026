@@ -1,0 +1,50 @@
+\documentclass[tikz,border=10pt]{standalone}
+\usepackage[UTF8]{ctex}
+\usepackage{amsmath}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric}
+
+\tikzset{
+  box/.style={draw=black, rectangle, text width=6.4cm, align=center,
+              minimum height=0.9cm, inner sep=4pt},
+  dec/.style={draw=black, diamond, text width=4.8cm, align=center, aspect=2.2,
+              inner sep=1pt},
+  term/.style={draw=black, rounded corners=6pt, text width=5.6cm, align=center,
+               minimum height=0.9cm, inner sep=4pt},
+  arrow/.style={-{Stealth[length=3mm]}, thick},
+  node distance=1.0cm,
+}
+
+\begin{document}
+\begin{tikzpicture}
+\node[term] (s) {开始：二分区间 $[0.075,\ 0.15]$
+（$0.15$ 为问题 2 基准，已知可行）};
+\node[box, below=of s] (a) {取测试点 $\text{mid} = (\text{lo}+\text{hi})/2$，
+计算轮廓 $\text{side} = \lceil\sqrt{\Sigma A(1+d)}\rceil$};
+\node[box, below=of a] (b) {并行 $K$ 种子可行性判定
+（SA \texttt{--feas-only}，\textbf{任一可行即可行}，抑制假阴性）};
+\node[dec, below=of b] (c) {任一判定可行？};
+\node[box, below left=1.3cm and -0.2cm of c] (d) {$\text{hi} = \text{mid}$};
+\node[box, below right=1.3cm and -0.2cm of c] (e) {$\text{lo} = \text{mid}$};
+\node[dec, below=of d] (f) {$\text{hi} - \text{lo} < \varepsilon = 10^{-4}$？};
+\node[box, below=of f] (g) {\textbf{双向确认}：$d^*$ 处多种子可行，且
+$d^*-\varepsilon$ 处全部种子不可行};
+\node[dec, below=of g] (h) {双向确认通过？};
+\node[box, below=of h] (i) {在 $d^*$ 处多起点完整求解
+（10 轮取 HPWL 最优，仅接受可行轮次）};
+\node[term, below=of i] (t) {输出 $d^*$、轮廓 side、HPWL 与最优布局};
+
+\draw[arrow] (s) -- (a);
+\draw[arrow] (a) -- (b);
+\draw[arrow] (b) -- (c);
+\draw[arrow] (c) -- node[above,font=\small] {是} (d);
+\draw[arrow] (c) -- node[above,font=\small] {否} (e);
+\draw[arrow] (e) |- (a);
+\draw[arrow] (d) -- (f);
+\draw[arrow] (f) -- node[left,font=\small] {否} (a);
+\draw[arrow] (f) -- node[right,font=\small] {是} (g);
+\draw[arrow] (g) -- (h);
+\draw[arrow] (h) -- node[right,font=\small] {否：沿不满足方向移动 $\varepsilon$ 重验（$\le12$ 步）} (g);
+\draw[arrow] (h) -- node[right,font=\small] {是} (i);
+\draw[arrow] (i) -- (t);
+\end{tikzpicture}
+\end{document}

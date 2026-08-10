@@ -1,0 +1,313 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[UTF8]{ctex}
+\usepackage{amsmath, amssymb}
+\usepackage{array}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{longtable}
+\usepackage{multirow}
+\usepackage{hyperref}
+
+\geometry{left=2.5cm, right=2.5cm, top=2.5cm, bottom=2.5cm}
+
+\title{\textbf{图表索引与用途说明}\\[6pt]
+\large 按题目分类的全部图、表、数据与文档清单}
+\author{2026 年第七届"华数杯"大学生数学建模竞赛 B 题 \\ 编程手交付说明}
+\date{2026/08/10}
+
+\begin{document}
+\maketitle
+
+本索引列出 \texttt{图表/} 目录下全部素材（文件名、位置、内容、论文建议
+使用位置）。\textbf{新增素材时请同步更新本索引}；论文数值一律以
+\texttt{公共/论文手手册/paper\_values.md} 为准。
+
+% ============================================================
+\section{公共素材（跨问使用）}
+
+\subsection{数据总览（图表/公共/数据总览/）—— 问题重述与数据分析节}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{1.5pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{7.6cm}>{\raggedright\arraybackslash}p{3.4cm}}
+\toprule
+文件名 & 内容说明 & 论文建议位置 \\
+\midrule
+eda\_\allowbreak{}01\_\allowbreak{}scale.png & 三芯片模块数/端子数/线网数对比 & 问题重述：数据规模 \\
+eda\_\allowbreak{}02\_\allowbreak{}dims.png & 模块尺寸分布 & 数据分析 \\
+eda\_\allowbreak{}03\_\allowbreak{}aspect.png & 模块长宽比分布 & 数据分析 \\
+eda\_\allowbreak{}04\_\allowbreak{}nets.png & 线网度分布 & 数据分析 \\
+eda\_\allowbreak{}05\_\allowbreak{}terminals.png & 端子数量统计 & 数据分析 \\
+eda\_\allowbreak{}06\_\allowbreak{}packing.png & 面积利用率预分析 & 数据分析 \\
+eda\_\allowbreak{}07\_\allowbreak{}top10.png & 面积最大的 10 个模块 & 数据分析 \\
+eda\_\allowbreak{}08\_\allowbreak{}compare.png & 三芯片结构对比 & 数据分析 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{总体结论（图表/公共/总体结论/）—— 摘要与结论节}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{1.5pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{7.6cm}>{\raggedright\arraybackslash}p{3.4cm}}
+\toprule
+文件名 & 内容说明 & 论文建议位置 \\
+\midrule
+overall\_\allowbreak{}improvement.png & 三问 vs 冻结交付的提升百分比总览 & 摘要/结论首图 \\
+overall\_\allowbreak{}runtime.png & 四问求解耗时对比 & 模型评价：算法效率 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{论文手手册（图表/公共/论文手手册/）}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{1.5pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{7.6cm}>{\raggedright\arraybackslash}p{3.4cm}}
+\toprule
+文件名 & 内容说明 & 用法 \\
+\midrule
+paper\_\allowbreak{}values.md & 全问定稿数值速查 + 复现溯源 & 全文数值引用 \\
+paper\_\allowbreak{}writer\_\allowbreak{}guide.pdf/.tex & 论文写作总纲（文件架构/材料清单/写作指导/定稿vs冻结） & 写作前必读 \\
+model\_\allowbreak{}evaluation.pdf/.tex & 模型评价与推广章节成稿 & 直接引用/微调 \\
+eda\_\allowbreak{}analysis.pdf/.tex & 数据分析章节成稿（数据总览 + 四个问题分别分析，每问配图/表/结论话术） & 直接引用/微调 \\
+model\_\allowbreak{}assumptions.pdf/.tex & 模型假设章节成稿（通用假设 + 四问分别假设 + 敏感性说明表） & 直接引用/微调 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================
+\section{问题一（图表/Q1/）}
+
+\subsection{图（图表/Q1/图/）}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{1.5pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{7.6cm}>{\raggedright\arraybackslash}p{3.4cm}}
+\toprule
+文件名 & 内容说明 & 论文建议位置 \\
+\midrule
+q1\_\allowbreak{}n100/n200/n300\_\allowbreak{}floorplan.png & 三芯片最终布图（面积/长宽比标注） & 结果与分析：Q1 布局 \\
+q1\_\allowbreak{}n100/n200/n300\_\allowbreak{}convergence.png & SA 收敛曲线（best cost 下降） & 算法设计：收敛性 \\
+快照/\{n100,n200,n300\}/snap\_\allowbreak{}01..09.png & SA 过程 9 等分快照（初始$\to$最终演化） & 算法设计：搜索过程（取 3--4 张代表） \\
+q1\_\allowbreak{}lambda\_\allowbreak{}sensitivity.png & 面积随 $\lambda$ 变化（三芯片） & 灵敏度分析 \\
+q1\_\allowbreak{}lambda\_\allowbreak{}aspect\_\allowbreak{}sensitivity.png & 长宽比随 $\lambda$ 变化 & 灵敏度分析 \\
+q1\_\allowbreak{}repeats\_\allowbreak{}convergence.png & 最优面积随种子数收敛 & 灵敏度分析 \\
+q1\_\allowbreak{}t2div\_\allowbreak{}sensitivity.png & 精修温度除数灵敏度 & 灵敏度分析 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{表（图表/Q1/表/）}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{1.5pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{7.6cm}>{\raggedright\arraybackslash}p{3.4cm}}
+\toprule
+文件名 & 内容说明 & 论文建议位置 \\
+\midrule
+q1\_\allowbreak{}tables.pdf/.tex & 五表：三组芯片无轮廓布图优化结果汇总 / 与冻结对比 / $\lambda$ 灵敏度 / 多种子快速模拟退火求解结果 / t2-div 灵敏度 & 结果与分析：Q1 全部表格 \\
+S1\_\allowbreak{}$\lambda$权重灵敏度.csv & $\lambda$ 灵敏度原始数据 & 数据附录 \\
+S2\_\allowbreak{}轮次收敛灵敏度.csv & 多种子（轮次）结果数据 & 数据附录 \\
+S3\_\allowbreak{}精修温度灵敏度.csv & t2-div 灵敏度数据 & 数据附录 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{说明（图表/Q1/说明/）}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{1.5pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{7.6cm}>{\raggedright\arraybackslash}p{3.4cm}}
+\toprule
+文件名 & 内容说明 & 用法 \\
+\midrule
+q1\_\allowbreak{}work\_\allowbreak{}guide.pdf/.tex & Q1 建模与算法全文档（问题重述/模型/算法/结果） & 写作公式与行文来源 \\
+q1\_\allowbreak{}flowchart.pdf/.tex & Q1 黑白论文级流程图（分析$\to$编码$\to$解码$\to$SA$\to$取优$\to$验证） & 算法设计：整体框架图 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================
+\section{问题二（图表/Q2/）}
+
+\subsection{图（图表/Q2/图/）}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{1.5pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{7.6cm}>{\raggedright\arraybackslash}p{3.4cm}}
+\toprule
+文件名 & 内容说明 & 论文建议位置 \\
+\midrule
+q2\_\allowbreak{}n100/n200/n300\_\allowbreak{}floorplan.png & 固定轮廓内最终布图（轮廓框 + HPWL） & 结果与分析：Q2 布局 \\
+q2\_\allowbreak{}n100/n200/n300\_\allowbreak{}convergence.png & 收敛曲线（run/run2 双阶段） & 算法设计：两阶段退火 \\
+快照/\{n100,n200,n300\}/snap\_\allowbreak{}01..09.png & SA 过程快照 & 算法设计（取代表） \\
+q2\_\allowbreak{}rounds\_\allowbreak{}distribution.png & 冻结 8 轮 HPWL 箱线图（轮间方差） & 模型评价：多起点必要性 \\
+q2\_\allowbreak{}multiseed\_\allowbreak{}hpwl.png & 多种子求解总 HPWL（定稿协议各轮，可行/越界区分，标注 best） & 结果与分析：多种子求解 \\
+q2\_\allowbreak{}t2div\_\allowbreak{}sensitivity.png & t2-div 灵敏度（三芯片 9 点） & 灵敏度分析 \\
+q2\_\allowbreak{}dead\_\allowbreak{}ratio\_\allowbreak{}sensitivity.png & 死区比例灵敏度 & 灵敏度分析 \\
+q2\_\allowbreak{}repeats\_\allowbreak{}sensitivity.png & 轮次收敛（t2=50） & 灵敏度分析 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{表（图表/Q2/表/）}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{1.5pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{7.6cm}>{\raggedright\arraybackslash}p{3.4cm}}
+\toprule
+文件名 & 内容说明 & 论文建议位置 \\
+\midrule
+q2\_\allowbreak{}tables.pdf/.tex & 八表：三组芯片固定轮廓布图优化结果汇总 / 与冻结对比 / t2-div 曲线 / 死区灵敏度 / 各芯片线网 HPWL 分布统计 / 多种子快速模拟退火求解结果（每轮明细 16/24 轮 × 3 芯片） & 结果与分析：Q2 全部表格 \\
+S1\_\allowbreak{}t2div灵敏度.csv / S2\_\allowbreak{}死区比例灵敏度.csv / S3\_\allowbreak{}轮次收敛灵敏度.csv & 灵敏度原始数据 & 数据附录 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{说明（图表/Q2/说明/）}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{1.5pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{7.6cm}>{\raggedright\arraybackslash}p{3.4cm}}
+\toprule
+文件名 & 内容说明 & 用法 \\
+\midrule
+q2\_\allowbreak{}work\_\allowbreak{}guide.pdf/.tex & Q2 建模与算法全文档 & 写作来源 \\
+q2\_\allowbreak{}flowchart.pdf/.tex & Q2 流程图（run 可行搜索$\to$run2 精修$\to$多起点$\to$过滤$\to$取优） & 算法设计框架图 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================
+\section{问题三（图表/Q3/）}
+
+\subsection{图（图表/Q3/图/）}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{1.5pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{7.6cm}>{\raggedright\arraybackslash}p{3.4cm}}
+\toprule
+文件名 & 内容说明 & 论文建议位置 \\
+\midrule
+q3\_\allowbreak{}n100/n200/n300\_\allowbreak{}floorplan.png & $d^*$ 轮廓内最终布局 & 结果与分析：Q3 布局 \\
+q3\_\allowbreak{}n100/n200/n300\_\allowbreak{}convergence.png & 收敛曲线 & 算法设计 \\
+q3\_\allowbreak{}n100/n200/n300\_\allowbreak{}bisect.png & 二分搜索过程轨迹（区间收缩 + 可行标记 + $d^*$ 标注） & 结果与分析：二分搜索过程 \\
+快照/\{n100,n200,n300\}/snap\_\allowbreak{}01..09.png & SA 过程快照 & 算法设计（取代表） \\
+q3\_\allowbreak{}seed\_\allowbreak{}sensitivity.png & $d^*$ 随判定种子数变化 & 灵敏度分析 \\
+q3\_\allowbreak{}eps\_\allowbreak{}sensitivity.png & $d^*$ 随二分精度变化 & 灵敏度分析 \\
+q3\_\allowbreak{}sep\_\allowbreak{}judge\_\allowbreak{}confirm.png & 判定/确认种子解耦 & 灵敏度分析 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{表（图表/Q3/表/）}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{1.5pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{7.6cm}>{\raggedright\arraybackslash}p{3.4cm}}
+\toprule
+文件名 & 内容说明 & 论文建议位置 \\
+\midrule
+q3\_\allowbreak{}tables.pdf/.tex & 三表：三组芯片二分搜索可行性判定过程（11 迭代×3 芯片） / 三组芯片最小死区比例与更新后 HPWL 汇总 / 最小死区比例附近扰动灵敏度核验（含确认下降轨迹） & 结果与分析：Q3 全部表格 \\
+S1\_\allowbreak{}判定种子数灵敏度.csv / S2\_\allowbreak{}二分精度灵敏度.csv / S3\_\allowbreak{}判定确认种子分离.csv & 灵敏度原始数据 & 数据附录 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{说明（图表/Q3/说明/）}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{1.5pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{7.6cm}>{\raggedright\arraybackslash}p{3.4cm}}
+\toprule
+文件名 & 内容说明 & 用法 \\
+\midrule
+q3\_\allowbreak{}work\_\allowbreak{}guide.pdf/.tex & Q3 建模与算法全文档（二分/多种子判定/双向确认） & 写作来源 \\
+q3\_\allowbreak{}flowchart.pdf/.tex & Q3 流程图（二分$\to$判定$\to$双向确认$\to$完整求解） & 算法设计框架图 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================
+\section{问题四（图表/Q4/）}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{1.5pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{7.6cm}>{\raggedright\arraybackslash}p{3.4cm}}
+\toprule
+文件名 & 内容说明 & 论文建议位置 \\
+\midrule
+图/q4\_\allowbreak{}optimal.png & 最优布局示意（4$\times$6=24，b3 填入凹角） & 结果与分析：Q4 最优布局 \\
+图/q4\_\allowbreak{}rotation\_\allowbreak{}freedom\_\allowbreak{}ablation.png & 旋转自由度消融（44/28/24） & 灵敏度分析 \\
+图/q4\_\allowbreak{}size\_\allowbreak{}perturbation.png & 尺寸扰动后最优面积 & 灵敏度分析 \\
+表/q4\_\allowbreak{}result.csv & 最优布局坐标 + 指标（min\_\allowbreak{}area 24/下界 24/bbox 版 32） & 结果与分析：Q4 数据 \\
+说明/q4\_\allowbreak{}flowchart.pdf/.tex & Q4 流程图（矩形分解$\to$穷举$\to$凹角支撑$\to$最优性证明） & 算法设计框架图 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================
+\section{灵敏度专项（图表/灵敏度/QN/）}
+
+每问目录含：\texttt{qN\_sensitivity\_report.pdf/.tex}（LaTeX 分析报告）、
+灵敏度图（与 QN/图/ 相同内容）、\texttt{S*.csv}（原始数据）。
+写"参数灵敏度分析"章节时打开对应目录即可。
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{1.5pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{7.6cm}>{\raggedright\arraybackslash}p{3.4cm}}
+\toprule
+目录 & 报告覆盖 & 论文建议位置 \\
+\midrule
+灵敏度/Q1/ & S1 $\lambda$ / S2 多种子收敛 / S3 精修温度 & 灵敏度分析：Q1 参数 \\
+灵敏度/Q2/ & S1 t2-div / S2 死区比例 / S3 轮次收敛 & 灵敏度分析：Q2 参数 \\
+灵敏度/Q3/ & S1 判定种子 / S2 二分精度 / S3 判定·确认解耦 & 灵敏度分析：Q3 搜索强度 \\
+灵敏度/Q4/ & S1 旋转消融 / S2 尺寸扰动 & 灵敏度分析：Q4 输入 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================
+\section{使用提示}
+
+\begin{enumerate}
+    \item 论文插图统一引用 \texttt{图表/QN/图/}（定稿版）；冻结对照图在
+    \texttt{qN/visualization/\allowbreak{}figs/\allowbreak{}baseline/}（可选对比）；
+    \item 快照每组 9 张，论文建议选初始、中期、末期各 1 张（如
+    snap\_01 / snap\_05 / snap\_09）组成"搜索过程演化"三联图；
+    \item 灵敏度报告 pdf 与 tex 同目录，可直接改 tex 重编译；
+    \item 所有数据表（qN\_tables.pdf）数值与 \texttt{paper\_values.md}
+    一致，引用时以速查表核对。
+\end{enumerate}
+
+\end{document}

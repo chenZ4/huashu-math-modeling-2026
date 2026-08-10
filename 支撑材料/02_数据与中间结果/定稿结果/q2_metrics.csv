@@ -1,0 +1,4 @@
+chip,side,hpwl,utilization,repeats_used,seed_base,time_s,legal,note
+n100,455,225403.5,0.867,0,20260808,6.06,True,ok
+n200,450,380261.0,0.8676,0,20260808,93.27,True,ok
+n300,561,530944.5,0.868,0,20260808,502.04,True,ok
