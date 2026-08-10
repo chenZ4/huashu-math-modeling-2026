@@ -85,7 +85,7 @@ def run_one(chip, alpha, dead, repeats=8, t2_div=0, outdir=None):
     best_log = os.path.join(out, f"q1_{chip}_best.log")
     best = None
     for r in range(max(1, repeats)):
-        seed = BASE_SEED + CHIP_IDX[chip] * 1000 + r
+        seed = BASE_SEED + r  # 与 scan 同源（scan.py: seed = 20260808 + r）
         cmd = [BIN, "q1", str(alpha), blocks_path, nets_path, pl_path,
                rpt, str(dead), "--log", log, "--seed", str(seed)]
         if t2_div > 0:
@@ -119,15 +119,17 @@ def main():
     ap.add_argument("--repeats", type=int, default=3, help="每芯片求解轮数，取最优")
     ap.add_argument("--t2-div", type=float, default=0, help="精修初始温度除数（0=默认，n200 定稿取 30）")
     ap.add_argument("--outdir", default=OUT, help="输出目录（定稿用 output/final）")
+    ap.add_argument("--chip", choices=CHIPS, default=None, help="只求解指定芯片（定稿逐芯片参数）")
     ap.add_argument("--skip-solve", action="store_true", help="跳过求解，只汇总已存在结果")
     args = ap.parse_args()
+    chips = [args.chip] if args.chip else CHIPS
     os.makedirs(args.outdir, exist_ok=True)
     run_dir = new_run_dir()
     print("run dir:", run_dir)
 
     results = []
     if args.skip_solve:
-        for chip in CHIPS:
+        for chip in chips:
             dims, total = parse_blocks(os.path.join(DATA, f"{chip}.blocks"))
             rpt = os.path.join(args.outdir, f"q1_{chip}.rpt")
             if not os.path.exists(rpt):
@@ -147,7 +149,7 @@ def main():
         with ThreadPoolExecutor(max_workers=3) as ex:
             results = list(ex.map(
                 lambda c: run_one(c, args.alpha, DEAD, args.repeats,
-                                  args.t2_div, args.outdir), CHIPS))
+                                  args.t2_div, args.outdir), chips))
 
     csv_path = os.path.join(args.outdir, "q1_metrics.csv")
     with open(csv_path, "w", newline="") as f:

@@ -1,0 +1,4 @@
+chip,area,W,H,aspect,utilization,time_s,legal,note
+n100,189198,414,457,1.1039,0.9487,0.8,True,ok
+n200,183112,376,487,1.2952,0.9595,11.4,True,ok
+n300,285228,417,684,1.6403,0.9577,19.28,True,ok

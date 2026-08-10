@@ -128,7 +128,9 @@ def main():
     ap.add_argument("--seeds", type=int, default=3, help="判定种子数（n100/n200 定稿取 15，n300 取 10）")
     ap.add_argument("--confirm-seeds", type=int, default=0, help="确认种子数（0=与判定一致）")
     ap.add_argument("--outdir", default=OUT, help="输出目录（定稿用 output/final）")
+    ap.add_argument("--chip", choices=CHIPS, default=None, help="只求解指定芯片（定稿逐芯片种子）")
     args = ap.parse_args()
+    chips = [args.chip] if args.chip else CHIPS
     os.makedirs(args.outdir, exist_ok=True)
     run_dir = new_run_dir()
     print("run dir:", run_dir)
@@ -136,13 +138,21 @@ def main():
     with ThreadPoolExecutor(max_workers=3) as ex:
         results = list(ex.map(
             lambda c: run_one(c, args.repeats, args.seeds,
-                              args.confirm_seeds, args.outdir), CHIPS))
+                              args.confirm_seeds, args.outdir), chips))
 
     csv_path = os.path.join(args.outdir, "q3_metrics.csv")
+    existing = []
+    if os.path.exists(csv_path):
+        with open(csv_path) as fh:
+            existing = [dict(r) for r in csv.DictReader(fh)]
+    merged = {r["chip"]: r for r in existing}
+    for r in results:
+        merged[r["chip"]] = r
+    rows = [merged[c] for c in CHIPS if c in merged]
     with open(csv_path, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(results[0].keys()))
+        w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         w.writeheader()
-        w.writerows(results)
+        w.writerows(rows)
     print(open(csv_path).read())
 
     viz = os.path.join(Q3, "visualization")

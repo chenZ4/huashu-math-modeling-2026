@@ -56,7 +56,7 @@ def run_one(chip, alpha, dead, rounds, t2_div=0, outdir=None):
     tasks = []
     for r in range(rounds):
         tasks.append((chip, alpha, dead,
-                      BASE_SEED + CHIP_IDX[chip] * 1000 + r,
+                      BASE_SEED + r,  # 与 scan 同源（scan.py: seed = 20260808 + r）
                       os.path.join(out, f"q2_{chip}_r{r}.rpt"),
                       os.path.join(out, f"q2_{chip}_r{r}.log"), t2_div))
     with ThreadPoolExecutor(max_workers=ROUND_WORKERS) as ex:
@@ -101,15 +101,17 @@ def main():
     ap.add_argument("--repeats", type=int, default=8, help="每芯片并行轮数")
     ap.add_argument("--t2-div", type=float, default=0, help="精修初始温度除数（0=默认；n100/n200/n300 定稿取 35/60/70）")
     ap.add_argument("--outdir", default=OUT, help="输出目录（定稿用 output/final）")
+    ap.add_argument("--chip", choices=CHIPS, default=None, help="只求解指定芯片（定稿逐芯片参数）")
     ap.add_argument("--skip-solve", action="store_true")
     args = ap.parse_args()
+    chips = [args.chip] if args.chip else CHIPS
     os.makedirs(args.outdir, exist_ok=True)
     run_dir = new_run_dir()
     print("run dir:", run_dir)
 
     results = []
     if args.skip_solve:
-        for chip in CHIPS:
+        for chip in chips:
             dims, total = parse_blocks(os.path.join(DATA, f"{chip}.blocks"))
             side = math.ceil(math.sqrt(total * (1.0 + DEAD)))
             rpt = os.path.join(args.outdir, f"q2_{chip}.rpt")
@@ -129,7 +131,7 @@ def main():
         with ThreadPoolExecutor(max_workers=CHIP_WORKERS) as ex:
             results = list(ex.map(
                 lambda c: run_one(c, ALPHA, DEAD, args.repeats,
-                                  args.t2_div, args.outdir), CHIPS))
+                                  args.t2_div, args.outdir), chips))
 
     csv_path = os.path.join(args.outdir, "q2_metrics.csv")
     with open(csv_path, "w", newline="") as f:
