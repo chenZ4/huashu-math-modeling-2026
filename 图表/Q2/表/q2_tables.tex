@@ -1,0 +1,123 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[UTF8]{ctex}
+\usepackage{amsmath, amssymb}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{float}
+\geometry{left=2.5cm, right=2.5cm, top=2.5cm, bottom=2.5cm}
+\title{\textbf{问题二 结果附表}\\[6pt]
+\large 定稿结果汇总 / 与冻结对比 / 参数灵敏度 / 轮次分布}
+\author{2026 年第七届"华数杯"大学生数学建模竞赛 B 题}
+\date{2026/08/10}
+\begin{document}
+\maketitle
+
+\section{三组芯片定稿结果汇总}
+
+定稿参数：死区比例 $d=0.15$（轮廓 $\text{side}=\lceil\sqrt{\Sigma A(1+d)}\rceil$），
+逐芯片精修温度 t2-div（35/60/70），固定种子多轮取优。
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lcccccc}
+\toprule
+芯片 & 参数 & 轮廓 side & HPWL & 面积利用率 & 理论上限 $1/1.15$ & 距上界 \\
+\midrule
+
+n100 & t2=35, 16轮 & 455 & \textbf{225403.5} & 0.867 & 0.8696 & $<0.3\%$ \\
+n200 & t2=60, 24轮 & 450 & \textbf{380261.0} & 0.8676 & 0.8696 & $<0.3\%$ \\
+n300 & t2=70, 24轮 & 561 & \textbf{530944.5} & 0.868 & 0.8696 & $<0.3\%$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+注：面积利用率实测 0.867--0.868，距理论极限 0.8696 不足 0.3\%——
+布局紧凑度已达轮廓公式决定的理论极限（死区不可压缩，矩形打包必然
+留缝）。定稿数值经逐位交叉核对与参数扫描最优一致。
+
+\section{与冻结交付对比}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lccccc}
+\toprule
+芯片 & 冻结 HPWL（t2=50, 8轮） & 定稿 HPWL & 提升 & 差异来源 \\
+\midrule
+
+n100 & 235183.0 & \textbf{225403.5} & -4.16\% & t2-div 50$\to$35、轮次 8$\to$16 \\
+n200 & 403295.0 & \textbf{380261.0} & -5.71\% & t2-div 50$\to$60、轮次 8$\to$24 \\
+n300 & 574322.5 & \textbf{530944.5} & -7.55\% & t2-div 50$\to$70、轮次 8$\to$24 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{精修初始温度除数 t2-div 灵敏度（16 轮统一协议）}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{1.8pt}
+\begin{tabular}{lrrrrrrrrr}
+\toprule
+芯片 & 20 & 25 & 30 & 35 & 40 & 45 & 50 & 60 & 70 \\
+\midrule
+
+n100 & 234304 & 236341 & 231169 & \textbf{225404} & 233093 & 229397 & 232114 & 296532 & 258900 \\
+n200 & 408126 & 407502 & 409858 & 409442 & 392945 & 405210 & 403938 & \textbf{380261} & 400806 \\
+n300 & -- & -- & 569205 & 562019 & 549226 & 542730 & 542895 & 545087 & \textbf{530944} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+注：加粗为各芯片最优 t2-div——n100 谷底在 35（225404）、n200 在 60
+（380261）、n300 在 70（530944，扫描边界，赛程内未加密 80/90）。
+最优值随芯片漂移，固定全局参数损失 4--6\% 收益。
+
+\section{死区比例灵敏度（$d\in[0.10,0.18]$）}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lcccc}
+\toprule
+芯片 & $d=0.10$ & 0.12 & 0.15（基准） & 0.18 \\
+\midrule
+
+n100 & 290127.0 & 241826.5 & 232114.0 & 228974.0 \\
+n200 & 545280.0 & 402880.0 & 399874.0 & 394435.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+注：HPWL 随死区比例增大单调改善（$d$ 0.10$\\to$0.18 时 n100 降 21\%、
+n200 降 28\%）；$d\\le0.12$ 恶化显著，$d\\ge0.15$ 进入平稳区
+（变化 $<1.5\%$）——基准 $d=0.15$ 选择稳健。
+
+\section{冻结 8 轮 HPWL 分布统计（baseline 轮次实测）}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lccccc}
+\toprule
+芯片 & min & 中位数 & max & spread & 中位/最优 \\
+\midrule
+
+n100 & 235183 & 299992 & 687833 & 192\% & 1.28 \\
+n200 & 403295 & 556205 & 585763 & 45\% & 1.38 \\
+n300 & 574322 & 837588 & 3152712 & 449\% & 1.46 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+注：单次退火轮间方差极大（n300 单轮最高达 min 的 4--5 倍），
+中位数明显差于最优——这正是\textbf{多起点取优}的必要性依据：
+best 而非单轮结果进入定稿。
+
+\end{document}

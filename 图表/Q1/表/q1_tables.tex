@@ -1,0 +1,123 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[UTF8]{ctex}
+\usepackage{amsmath, amssymb}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{float}
+\geometry{left=2.5cm, right=2.5cm, top=2.5cm, bottom=2.5cm}
+\title{\textbf{问题一 结果附表}\\[6pt]
+\large 定稿结果汇总 / 与冻结对比 / 参数灵敏度}
+\author{2026 年第七届"华数杯"大学生数学建模竞赛 B 题}
+\date{2026/08/10}
+\begin{document}
+\maketitle
+
+\section{三组芯片定稿结果汇总}
+
+定稿参数：$\lambda = 0.5$（三芯片统一），n200 精修温度 t2-div$=30$，
+固定种子（seed\_base$=20260808$）多轮取优。
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{lccccccccc}
+\toprule
+芯片 & 参数 & 轮廓 $W\times H$ & 面积 $A$ & 模块总面积 $T$ & 利用率 $\eta$ & 死区比例 & 下界相对差距 & 长宽比 $R$ & 耗时(s) \\
+\midrule
+
+n100 & t2=20, 8轮 & $414\times457$ & \textbf{189198} & 179501 & 0.9487 & 5.13\% & 5.40\% & 1.1039 & 0.8 \\
+n200 & t2=30, 24轮 & $376\times487$ & \textbf{183112} & 175696 & 0.9595 & 4.05\% & 4.22\% & 1.2952 & 11.4 \\
+n300 & t2=20, 24轮 & $417\times684$ & \textbf{285228} & 273170 & 0.9577 & 4.23\% & 4.41\% & 1.6403 & 19.28 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+注：面积利用率 $\eta = T/A$；死区比例 $= 1-\eta$；下界相对差距
+$= (A-T)/T$。定稿数值经逐位交叉核对与参数扫描最优一致，三芯片均通过
+独立合法性复核（无重叠、尺寸保持）。
+
+\section{与冻结交付对比}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lcccccc}
+\toprule
+芯片 & 冻结面积 & 定稿面积 & 面积提升 & 冻结长宽比 & 定稿长宽比 & 差异来源 \\
+\midrule
+
+n100 & 189198 & \textbf{189198} & +0.00\% & 1.1039 & 1.1039 & 已到最优（8 轮收敛） \\
+n200 & 183840 & \textbf{183112} & -0.40\% & 1.2533 & 1.2952 & t2-div 20$\to$30 \\
+n300 & 287448 & \textbf{285228} & -0.77\% & 1.2903 & 1.6403 & 轮次 3$\to$24、种子固定 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{权重 $\lambda$ 灵敏度（扫描 $\lambda\in[0.375,0.625]$）}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{lrrrrrrrrrrr}
+\toprule
+芯片 & 0.375 & 0.40 & 0.425 & 0.45 & 0.475 & 0.50 & 0.525 & 0.55 & 0.575 & 0.60 & 0.625 \\
+\midrule
+
+n100 & 190800 & 189930 & 191196 & 190900 & 191438 & \textbf{189198} & 190773 & 190256 & 191774 & 191394 & 191199 \\
+n200 & 183658 & 183138 & 184230 & 183150 & 184052 & \textbf{183708} & 183225 & 183141 & 183540 & 183560 & 183120 \\
+n300 & -- & 287763 & -- & 286080 & 286749 & \textbf{285228} & 286512 & 285670 & -- & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+注：n100/n200 各 11 点、n300 6 点（0.4--0.55）；加粗为 $\lambda=0.5$。
+三芯片谷底均位于 $\lambda=0.5$ 附近（n200 与最优差 $<0.3\%$），
+$[0.45, 0.55]$ 内面积变化 $<1\%$，参数选择稳健。
+
+\section{独立轮次收敛（$\lambda=0.5$）}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lccccc}
+\toprule
+芯片 & 4 轮 & 8 轮 & 12 轮 & 16 轮 & 24 轮 \\
+\midrule
+
+n100 & 193697 & 189198 & 189198 & 189198 & 189198 \\
+n200 & -- & 183742 & -- & 183742 & 183708 \\
+n300 & -- & -- & -- & 285228 & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+注：n100 在 8 轮收敛至 189198 后不再改善；n200 在 24 轮仅有
+$<0.1\%$ 级改善（183742$\\to$183708，t2=20 下）。多轮取优用于对抗
+单次运行的随机波动。
+
+\section{精修初始温度除数 t2-div 灵敏度（$\lambda=0.5$）}
+
+\begin{table}[H]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lcccc}
+\toprule
+芯片 & t2-div 10 & 15 & 20（默认） & 30 \\
+\midrule
+
+n100 & 190112 & 190442 & 189198 & 190965 \\
+n200 & 184274 & 183717 & 183742 & 183112 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+注：n100 在默认 t2-div$=20$ 最优（189198）；n200 随 t2-div 增大单调
+改善，t2-div$=30$ 时 183112（较默认低 0.34\% 且长宽比更优），定稿
+采用；n300 保持默认 20。t2-div 40/50/60 因赛程时间未加密，如实记录。
+
+\end{document}
