@@ -8,14 +8,11 @@
 
 \lstset{
   basicstyle=\footnotesize\ttfamily,
-  keywordstyle=\color{blue}\bfseries,
-  commentstyle=\color{gray},
-  stringstyle=\color{red},
+  keywordstyle=\bfseries,
   showstringspaces=false,
   breaklines=true,
   frame=single,
   numbers=left,
-  numberstyle=\tiny\color{gray},
   tabsize=4,
   xleftmargin=1.2em,
 }
@@ -32,6 +29,8 @@
 逐行一致），供代码复核与结果复现时对照。
 
 \section{节点数据结构（10-bit 位压缩）}
+
+B$^*$ 树节点将父指针、左右子指针与旋转位压缩进一个 32 位整数，单节点仅 4 字节，支持至 1023 节点。
 
 \begin{lstlisting}[language=C++]
 
@@ -50,6 +49,8 @@ template<typename ID, typename LEN> struct FLOOR_PLAN<ID, LEN>::NODE {
 \end{lstlisting}
 
 \section{Skyline 轮廓压缩解码}
+
+按先序遍历放置：左子紧贴父右、右子与父左对齐，$y$ 取轮廓区间最大顶高；任意树解码结果天然无重叠，摊还复杂度 $O(n)$。
 
 \begin{lstlisting}[language=C++]
 
@@ -85,6 +86,8 @@ template<typename ID, typename LEN> struct FLOOR_PLAN<ID, LEN>::NODE {
 \end{lstlisting}
 
 \section{三种扰动算子}
+
+每步以 0.30 / 0.35 / 0.35 的概率执行旋转、删除-插入或节点交换，三者均保持树拓扑合法（节点集合守恒、无环）。
 
 \begin{lstlisting}[language=C++]
 
@@ -122,6 +125,8 @@ template<typename ID, typename LEN> struct FLOOR_PLAN<ID, LEN>::NODE {
 
 \section{代价函数与可行性判定}
 
+问题一以 $\lambda$ 加权面积与长宽比对称惩罚；问题二 run 阶段用可行搜索代价（面积+轮廓压力），run2 阶段用精修代价；可行性判定为外接矩形不越出固定轮廓。
+
 \begin{lstlisting}[language=C++]
 
   float norm_cost(const int3& cost) const {
@@ -143,6 +148,8 @@ template<typename ID, typename LEN> struct FLOOR_PLAN<ID, LEN>::NODE {
 \end{lstlisting}
 
 \section{快速模拟退火（精修阶段 run2 主循环）}
+
+低温精修主循环：扰动、解码、Metropolis 接受判断、自适应降温与停滞重置（reheating）；best 仅更新于可行且更优的解。
 
 \begin{lstlisting}[language=C++]
 
@@ -218,6 +225,8 @@ template<typename ID, typename LEN> struct FLOOR_PLAN<ID, LEN>::NODE {
 
 \section{求解入口}
 
+两轮独立精修退火各返回最优解，取代价更小者输出。
+
 \begin{lstlisting}[language=C++]
 
            ostream* log = nullptr, bool feas_only = false) {
@@ -258,6 +267,8 @@ template<typename ID, typename LEN> struct FLOOR_PLAN<ID, LEN>::NODE {
 \end{lstlisting}
 
 \section{问题三：二分搜索与双向确认}
+
+并行多种子判定（任一可行即可行）抑制假阴性；二分收敛后做双向确认：$d^*$ 处可行且 $d^*-\varepsilon$ 处全部种子不可行。
 
 \begin{lstlisting}[language=Python]
 
@@ -316,6 +327,8 @@ def confirm_minimum(chip, d_star, total, work_dir, verify_seeds=VERIFY_SEEDS):
 \end{lstlisting}
 
 \section{问题四：超块穷举（矩形分解与凹角支撑解码）}
+
+L/T 模块经矩形分解为超块，放置时以内部矩形分别对轮廓求支撑（凹角精确支撑），再做矩形级重叠检查；穷举 86\,016 组合。
 
 \begin{lstlisting}[language=Python]
 
