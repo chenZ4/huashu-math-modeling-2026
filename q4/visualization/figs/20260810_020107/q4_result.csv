@@ -1,7 +1,0 @@
-module,rotation_deg,x,y,rects
-b3,0,0,0,"0,0,2,1"
-b1,270,0,0,"2,0,2,4;0,1,2,2"
-b2,270,0,3,"0,1,4,1;0,0,2,1"
-b4,90,0,5,"0,0,4,1"
-
-min_area,24,total_area_lb,24,bbox_version_min,32,valid_layouts,86016
