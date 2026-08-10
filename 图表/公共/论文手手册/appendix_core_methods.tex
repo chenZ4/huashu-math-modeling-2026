@@ -1,0 +1,251 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[UTF8]{ctex}
+\usepackage{amsmath, amssymb}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{tcolorbox}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{hyperref}
+
+\geometry{left=2.5cm, right=2.5cm, top=2.5cm, bottom=2.5cm}
+
+\title{\textbf{附录 核心算法与方法实现说明}\\[6pt]
+\large 正文后附：B$^*$ 树 / Skyline 解码 / 快速模拟退火 / 二分与双向确认 / 超块穷举}
+\author{2026 年第七届"华数杯"大学生数学建模竞赛 B 题}
+\date{2026/08/10}
+
+\begin{document}
+\maketitle
+
+本附录给出正文模型与算法所对应的\textbf{核心方法实现要点}：数据结构、
+解码规则、搜索算法与关键参数，供代码复核与结果复现时对照。
+
+% ============================================================
+\section{B$^*$ 树编码与完备性}
+% ============================================================
+
+\textbf{表示}：B$^*$ 树为一棵有序二叉树，节点与模块一一对应，满足
+（1）中序遍历次序即模块按横坐标非降序；（2）根节点位于原点。
+
+\textbf{完备性}：给定模块尺寸，每个满足压缩条件（任意模块左移或下移
+即与其他模块重叠）的合法布图与一棵 B$^*$ 树及一组旋转状态\textbf{一一
+对应}。因此优化布图等价于优化树拓扑与旋转状态。
+
+\textbf{数据结构}：节点指针采用 10-bit 位压缩——父指针、左右子指针与
+旋转位共存于一个 32 位整数（\texttt{NODE}），支持至 1023 节点，
+单节点仅 4 字节。
+
+% ============================================================
+\section{Skyline 轮廓压缩解码}
+% ============================================================
+
+按先序遍历放置模块，水平轮廓线（Skyline）维护"各横区间当前最高顶"：
+
+\begin{enumerate}[leftmargin=2em]
+    \item 根节点置于原点 $(0,0)$；
+    \item 左子：$x = x_{\text{父}} + \tilde w_{\text{父}}$（紧贴父右），
+    $y$ 取轮廓区间 $[x,\ x+\tilde w)$ 内的最大顶高；
+    \item 右子：$x = x_{\text{父}}$（与父左对齐），$y$ 取对应区间
+    最大顶高；
+    \item 放置后将模块顶边合并进轮廓（删除被覆盖段）。
+\end{enumerate}
+
+\begin{tcolorbox}[colback=gray!6, colframe=gray!50, title=解码伪代码]
+{\footnotesize
+\begin{verbatim}
+放置(u):
+  若 u 有左子 lc: x(lc)=x(u)+w(u)
+                y(lc)=轮廓区间 [x(lc), x(lc)+w(lc)) 的最大顶高; 放置(lc)
+  若 u 有右子 rc: x(rc)=x(u)
+                y(rc)=轮廓区间 [x(rc), x(rc)+w(rc)) 的最大顶高; 放置(rc)
+\end{verbatim}
+}
+\end{tcolorbox}
+
+任意合法树解码结果\textbf{必然无重叠且为可容许布局}；轮廓以链表维护，
+每段至多被覆盖一次，解码摊还复杂度 $O(n)$。
+
+% ============================================================
+\section{扰动算子}
+% ============================================================
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{clc}
+\toprule
+算子 & 操作语义 & 概率 \\
+\midrule
+旋转 & 随机选一模块翻转 $90^\circ$（仅翻转尺寸标志） & 0.30 \\
+删除-插入 & 随机删一节点再插入随机位置（改变父子结构） & 0.35 \\
+节点交换 & 随机交换两节点（近邻/远邻两种实现） & 0.35 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+删除-插入与交换均保持树拓扑合法（节点集合守恒、无环），拓扑由
+\texttt{ValidateTree()} 白盒校验。
+
+% ============================================================
+\section{快速模拟退火}
+% ============================================================
+
+\subsection{构造期：归一化与初始温度}
+
+随机采样 $N{+}1$ 个布局，估计目标函数归一化常数
+$\bar A$、$\bar P$（面积与长宽比惩罚的均值，乘松弛系数 1.1），并估计
+初始温度使初始接受率约 $P=0.9$：
+\begin{equation}
+T_0 = -\frac{\bar{|\Delta|}}{\ln P}.
+\end{equation}
+
+\subsection{自适应冷却}
+
+每一温度层执行 $rnd = 2n + 20$ 次扰动，按层内平均代价差驱动降温：
+\begin{equation}
+T_k = \begin{cases}
+T_0 \cdot \dfrac{\bar{|\Delta|}_k}{c\,k}, & k \le k_0, \\[1.2em]
+T_0 \cdot \dfrac{\bar{|\Delta|}_k}{k}, & k > k_0,
+\end{cases}
+\quad k_0 = \max\!\Big(2,\ \Big\lceil\tfrac{n}{11}\Big\rceil\Big),\ \
+c = \max(100-n,\ 10).
+\end{equation}
+
+\subsection{接受准则与停滞重置}
+
+Metropolis 准则：$\Delta \le 0$ 或 $\xi < e^{-\Delta/T}$ 时接受。
+连续 $2n$ 层无改进则重置 $T \leftarrow T_0$（reheating），重置次数
+超限即终止。
+
+\subsection{终止条件}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{ll}
+\toprule
+条件 & 含义 \\
+\midrule
+$T \le 0.001$ & 温度下界（冻结） \\
+拒绝率 $\ge 99\%$ & 连续 $rnd$ 次几乎全拒（收敛） \\
+$k > 9n$ & 迭代层数上限 \\
+重置次数超限 & 精修阶段 $> n/7 + 1$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{整体伪代码}
+
+\begin{tcolorbox}[colback=blue!5, colframe=blue!50, title=算法 1：B$^*$ 树 + 快速模拟退火]
+{\small
+\begin{verbatim}
+输入: 模块尺寸, λ, 采样次数 N+1
+输出: 最优布局
+1  采样 N+1 个随机布局 -> Ā, P̄, T0          # 构造期
+2  T <- T0/20(或 t2-div 指定); 初始化树
+3  while 未满足终止条件 do
+4      for i <- 1 to rnd (=2n+20) do
+5          T' <- 扰动(T); 解码 T' -> (W,H); 计算代价 f(T')
+6          Δ <- f(T')-f(T)
+7          if Δ<=0 或 ξ<exp(-Δ/T) then 接受 T'
+8      T <- T0·|Δ̄|_k/(c·k)                   # 自适应降温
+9      if 停滞 then T <- T0                  # reheating
+10 return 历史最优
+\end{verbatim}
+}
+\end{tcolorbox}
+
+% ============================================================
+\section{问题二的两阶段退火与多起点}
+% ============================================================
+
+\textbf{run 阶段（可行搜索）}：混合代价
+$c_{\text{norm}} = \alpha \frac{A}{\bar A} + \beta \frac{H}{\bar H}
++ (1-\alpha-\beta)\frac{(r-R)^2}{\bar r}$，其中 $\alpha$ 随可行性
+窗口自适应滑动、$\beta$ 可行后递增，把布局压入固定轮廓。
+
+\textbf{run2 阶段（精修）}：代价 $c_{\text{true}} = \lambda WH
++ (1-\lambda)\frac{H}{2}$，初始温度 $T_0/\text{t2-div}$（默认 50；
+定稿逐芯片取 35/60/70），低温快速下山，best 仅更新于可行且更优。
+
+\textbf{多起点}：每芯片 $N$ 个独立随机种子各跑完整两阶段退火，
+只接受可行轮次（bbox $\le$ side），取 HPWL 最小为定稿。
+
+% ============================================================
+\section{问题三：二分搜索与双向确认}
+% ============================================================
+
+可行性判定调用 SA 的 \texttt{--feas-only} 模式（找到首可行即早停返回）；
+每点并行 $K$ 个独立种子，\textbf{任一可行即可行}（OR 语义），将假阴性
+概率按 $P \approx \prod_{s=1}^{K} P_s$ 指数下降。
+
+\begin{tcolorbox}[colback=blue!5, colframe=blue!50, title=算法 2：最小可行死区比例]
+{\small
+\begin{verbatim}
+1  二分区间 [0.075, 0.15]
+2  while hi-lo >= ε (=1e-4) do
+3      mid <- (lo+hi)/2
+4      if 并行 K 种子判定(mid) 可行 then hi <- mid else lo <- mid
+5  d* <- hi
+6  双向确认(最多 12 步):
+7      d* 处多种子必须可行, 否则上移 ε
+8      d*-ε 处多种子必须全部不可行, 否则下移 ε
+9  在 d* 处多起点完整求解取 HPWL 最优
+\end{verbatim}
+}
+\end{tcolorbox}
+
+$d^*$ 为"在当前搜索强度（判定种子数）下验证过的最小可行值"，
+定稿判定种子为 15/15/10，全部通过双向确认。
+
+% ============================================================
+\section{问题四：超块穷举与最优性证明}
+% ============================================================
+
+\textbf{矩形分解}：L/T 模块表示为固定相对位置的矩形并集（超块）。
+\textbf{凹角精确支撑}：超块 $y$ 坐标由内部矩形分别对轮廓求支撑取最大值
+\begin{equation}
+y_{\text{block}} = \max_i \big( \text{support}(R_i) - y_i \big),
+\end{equation}
+使凹角空间被充分利用（对比按 bbox 放置省 25\% 面积）。
+
+\textbf{穷举}：14 树形 $\times$ 24 排列 $\times$ 256 旋转
+$= 86\,016$ 组合，全部做矩形级重叠检查；断言 $best \ge \Sigma A = 24$。
+
+\textbf{最优性}：下界 $WH \ge 24$ 且穷举找到面积 $=24$ 的合法布局
+$\Rightarrow$ 全局最优（下界可达性证明，不依赖搜索运气）。
+
+% ============================================================
+\section{复现协议与复杂度}
+% ============================================================
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+环节 & 种子公式 & 说明 \\
+\midrule
+定稿求解（每轮） & $20260808 + r$ & $r$ 为轮次，逐位可复现 \\
+Q3 判定 & $20260808 + i_c\cdot10^4 + t\cdot10^2 + i$ & 芯片/标签/种子索引 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lc}
+\toprule
+环节 & 复杂度 \\
+\midrule
+Skyline 解码（摊还） & $O(n)$ \\
+单温度层 & $O(n^2)$（$rnd = 2n+20$ 次扰动 $\times$ $O(n)$ 解码） \\
+Q3 二分（11 次迭代 $\times$ $K$ 种子） & $O(K\log(1/\varepsilon)\cdot T_{\text{feas}})$ \\
+Q4 穷举 & $O(14 \cdot 4! \cdot 4^4 \cdot n_{\text{rect}}^2)$，秒级 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\end{document}
