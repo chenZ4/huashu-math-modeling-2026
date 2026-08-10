@@ -32,8 +32,11 @@ make
 
 - 论文数值速查 + 溯源：`paper/data_package/paper_values.md`
 - 各问详细建模与算法：`qX/qX_work_guide.pdf`（论文手工作稿风格）
-- 灵敏度分析：`图表/灵敏度/QN/qN_sensitivity_report.pdf`（LaTeX 分析 + 图 + 数据，按问收录）
-- 灵敏度论文章节素材：`paper/sensitivity_analysis.pdf`
+- 灵敏度分析：`图表/灵敏度/QN/`（报告 tex/pdf + 图 + S 数据，按问收录）
+- 论文章节成稿（`paper/`）：`sensitivity_analysis.pdf`（灵敏度分析）、
+  `eda_analysis.pdf`（数据分析三维度）、`model_evaluation.pdf`（模型评价与推广）、
+  `paper_writer_guide.pdf`（论文写作总纲）
+- 图表总索引：`图表/图表索引.pdf`（全部素材：文件名/位置/内容/论文建议位置）
 
 ## 求解器用法
 
@@ -106,8 +109,19 @@ python q3/sensitivity/q3_sensitivity.py   # S1 判定种子 / S2 二分精度 / 
 python q4/sensitivity/q4_sensitivity.py   # S1 旋转消融 / S2 尺寸扰动（穷举变体）
 ```
 
-- CSV 汇总：`qX/sensitivity/S*.csv`；报告：`qX/sensitivity/qX_sensitivity_report.pdf`
-- 灵敏度输出：根目录 `图表/灵敏度/QN/`（图 + S 系列数据）
+- CSV 汇总与脚本：`qX/sensitivity/`；报告 tex/pdf：`图表/灵敏度/QN/`（图 + S 数据同目录）
+- 另：结果附表（定稿汇总/多种子明细/二分过程等）在 `图表/QN/表/qN_tables.pdf`
+
+## 数据分析（EDA）
+
+```bash
+python eda/eda.py    # 12 张 EDA 图 + 统计表（纯读原始数据）
+```
+
+- 基础统计 8 张（规模/尺寸/长宽比/线网/端子/打包率/Top10/对比）
+- 论证式三维度 4 张：面积 KDE（长尾异质性）、宽高散点（红圈长条模块）、
+  度数双对数（集中型连接）、Top5% 枢纽 + 统计表（面积 CV、面积跨度、枢纽清单）
+- 论文"数据分析"章节成稿：`paper/eda_analysis.pdf`（三维度话术已按实测数据修正）
 
 ## 参数扫描挂机（scan/）
 
@@ -128,11 +142,12 @@ data/raw/                 原始附件副本 n100/n200/n300（.blocks/.nets/.pl�
 cpp_solver/               【冻结版】C++ B*-Tree + Fast-SA 核心（1134 断言，交付基线）
 cpp_solver_opt/           【优化版】vector Skyline + --t2-div（定稿/参数实验用）
 scan/                     参数扫描挂机（scan.py / configs.py / cross_check.py / results / logs）
-eda/                      数据探索分析（EDA 图 + 统计汇总）
+eda/                      数据探索分析（12 张 EDA 图 + 统计表，论证式三维度）
 common/                   共享 Python 库（visualize / verify）
-q1/ q2/ q3/ q4/           各问客制层（solver + output[baseline/final] + visualization[baseline/final] + work_guide + sensitivity）
-图表/                     论文素材总集（按题目分类：Q1-Q4 图/表/说明 + 公共/）
-paper/                    论文写作（data_package/ 数值速查表 + sensitivity_analysis.pdf）
+q1/ q2/ q3/ q4/           各问客制层（solver + output[baseline/final] + visualization[baseline/final]
+                          + work_guide + sensitivity + latex[流程图/结果附表]）
+图表/                     论文素材总集（Q1-Q4 图/表/说明、灵敏度/、公共/[数据总览/总体结论/论文手手册]）
+paper/                    论文写作（数值速查表 + 四份章节成稿：灵敏度/数据分析/模型评价/总纲）
 B题 VLSI布图规划设计/      题面与参考文献
 HW2/                      HW2 原始方案（仅参考，保持纯净）
 ```
