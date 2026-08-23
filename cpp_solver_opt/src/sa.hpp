@@ -88,7 +88,6 @@ public:
           ++_N_feas;
           _recs.push_back(true);
           ++tot_feas;
-          if (early_feas) { done = true; break; }
         } else _recs.push_back(false);
         _alpha = _alpha_base + (1 - _alpha_base) * float(_N_feas) / float(_N);
 
@@ -106,6 +105,8 @@ public:
           _fp.restore(last_sol);
           ++rej_num;
         }
+        // 修复：首个可行解须先落入 _best_sol 再早停（feas-only 输出布局用）
+        if (early_feas && tot_feas) { done = true; break; }
       }
       if (done) break;
       ++iter;
@@ -298,12 +299,70 @@ private:
 };
 
 template<typename ID, typename LEN>
+void local_descent(FLOOR_PLAN<ID, LEN>& fp, int Nblcks, Mode mode,
+                   int W, int H, int max_sweeps = 5) {
+  // SA 后确定性局部下降：rotate 全扫 + swap 全对扫，直至整遍无改进。
+  // Q2：只接受保持可行（bbox<=轮廓）且 HPWL 严格下降；Q1：面积优先、
+  // 面积相等时长宽比对称惩罚 r+1/r-2 更小。无随机数，同输入完全确定。
+  auto feas_ok = [&](const int3& c) -> bool {
+    return (mode == Mode::Q1) || (get<1>(c) <= W && get<2>(c) <= H);
+  };
+  auto area = [&](const int3& c) -> long long {
+    return (long long)get<1>(c) * get<2>(c);
+  };
+  auto q1_pen = [&](const int3& c) -> double {
+    const long long w = get<1>(c), h = get<2>(c);
+    if (w <= 0 || h <= 0) return 1e18;
+    const double r = double(max(w, h)) / double(min(w, h));
+    return r + 1.0 / r - 2.0;
+  };
+  auto accept = [&](const int3& c, const int3& cur) -> bool {
+    if (!feas_ok(c)) return false;
+    if (mode == Mode::Q2) return get<0>(c) < get<0>(cur);
+    if (area(c) != area(cur)) return area(c) < area(cur);
+    return q1_pen(c) < q1_pen(cur);
+  };
+
+  fp.init();
+  int3 cur = fp.cost();
+  if (!feas_ok(cur)) return;   // 起始不可行则不做下降（保持原结果）
+  int sweeps = 0;
+  while (sweeps < max_sweeps) {
+    ++sweeps;
+    bool improved = false;
+    auto base = fp.get_tree();
+    for (ID i = 1; i <= Nblcks; ++i) {
+      auto t = base;
+      t.rotate(i);
+      fp.restore(t); fp.init();
+      int3 c = fp.cost();
+      if (accept(c, cur)) { base = t; cur = c; improved = true; }
+      else fp.restore(base);
+    }
+    for (ID i = 1; i <= Nblcks; ++i) {
+      for (ID j = i + 1; j <= Nblcks; ++j) {
+        auto t = base;
+        t.swap_two_nodes(i, j);
+        fp.restore(t); fp.init();
+        int3 c = fp.cost();
+        if (accept(c, cur)) { base = t; cur = c; improved = true; }
+        else fp.restore(base);
+      }
+    }
+    fp.restore(base);
+    fp.init();
+    if (!improved) break;
+  }
+}
+
+template<typename ID, typename LEN>
 void solve(ifstream& fnets, ifstream& fblcks, ifstream& fpl,
            const string& rpt, int Nnets, int Nblcks, int Ntrmns,
            float alpha, float dead_ratio, Mode mode = Mode::Q2,
            ostream* log = nullptr, bool feas_only = false,
            float t2_div = 0.f,
-           const vector<string>* init_order = nullptr) {
+           const vector<string>* init_order = nullptr,
+           bool descent = false) {
   FLOOR_PLAN<ID, LEN> fp(fnets, fblcks, fpl, rpt, Nnets, Nblcks, Ntrmns,
                          alpha, dead_ratio, mode == Mode::Q1);
   if (init_order && !fp.set_init_order(*init_order)) {
@@ -324,6 +383,14 @@ void solve(ifstream& fnets, ifstream& fblcks, ifstream& fpl,
     outs << (sa.last_feasible() ? 1 : 0) << '\n';
     outs << get<1>(costs) << " " << get<2>(costs) << '\n';
     outs << get<0>(costs) / 2. << '\n';
+    // 追加完整块行（暖启动提序用；前 3 行格式不变，兼容旧解析器）
+    if (sa.last_feasible()) {
+      for (ID i = 1; i <= Nblcks; ++i) {
+        const auto& b = fp.blk(i);
+        outs << b._name << ' ' << b._x << ' ' << b._y << ' '
+             << b._x + b._w << ' ' << b._y + b._h << '\n';
+      }
+    }
     return;
   }
   typename FLOOR_PLAN<ID, LEN>::TREE trees[2];
@@ -340,6 +407,7 @@ void solve(ifstream& fnets, ifstream& fblcks, ifstream& fpl,
   }
   fp.restore(costs[0] < costs[1] ? trees[0] : trees[1]);
   fp.init();
+  if (descent) local_descent(fp, Nblcks, mode, fp.W(), fp.H());
   ofstream outs(rpt);
   fp.output(outs);
 }

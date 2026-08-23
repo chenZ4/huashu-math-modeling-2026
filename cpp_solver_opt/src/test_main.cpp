@@ -1642,6 +1642,178 @@ static void test_m7_solve_with_init_order() {
   CHECK((bool)rpt2, "M7: feas-only with init-order writes rpt");
 }
 
+// ===================== M8: local descent =====================
+static void write_m8_files() {
+  ofstream fb("/tmp/m8.blocks");
+  fb << "NumHardBlocks : 3\nNumTerminals : 1\n";
+  fb << "b1 block 4 (0,0) (0,10) (10,10) (10,0)\n";
+  fb << "b2 block 4 (0,0) (0,20) (20,20) (20,0)\n";
+  fb << "b3 block 4 (0,0) (0,30) (30,30) (30,0)\n";
+  fb << "p1 terminal\n";
+  fb.close();
+  ofstream fn("/tmp/m8.nets");
+  fn << "NumNets : 1\nNumPins : 2\nNetDegree : 2\nb1\np1\n";
+  fn.close();
+  ofstream fpl("/tmp/m8.pl");
+  fpl << "p1 0 0\n";
+  fpl.close();
+}
+
+static long long m8_line2(const string& p) {
+  ifstream f(p);
+  string s;
+  getline(f, s);
+  getline(f, s);
+  return (long long)stod(s);
+}
+
+static void test_m8_descent_no_worse() {
+  write_m8_files();
+  for (int rep = 0; rep < 3; ++rep) {
+    srand(42);
+    {
+      ifstream fb("/tmp/m8.blocks");
+      ifstream fn("/tmp/m8.nets");
+      ifstream fpl("/tmp/m8.pl");
+      solve<short, int>(fn, fb, fpl, "/tmp/m8a.rpt", 1, 3, 1, 0.5f, 0.15f,
+                        Mode::Q2, nullptr, false, 0.f, nullptr, true);
+    }
+    srand(42);
+    {
+      ifstream fb("/tmp/m8.blocks");
+      ifstream fn("/tmp/m8.nets");
+      ifstream fpl("/tmp/m8.pl");
+      solve<short, int>(fn, fb, fpl, "/tmp/m8b.rpt", 1, 3, 1, 0.5f, 0.15f,
+                        Mode::Q2, nullptr, false, 0.f, nullptr, false);
+    }
+    CHECK(m8_line2("/tmp/m8a.rpt") <= m8_line2("/tmp/m8b.rpt"),
+          "M8a: descent result not worse than SA-only");
+  }
+}
+
+static void test_m8_descent_keeps_feasible() {
+  write_m8_files();
+  ifstream fb("/tmp/m8.blocks");
+  ifstream fn("/tmp/m8.nets");
+  ifstream fpl("/tmp/m8.pl");
+  FP fp(fn, fb, fpl, "", 1, 3, 1, 0.5f, 0.15f);
+  SA<short, int> sa(fp, 3, fp.W(), fp.H(), fp.R(), 0.9f, 0.5f, 0.1f, 0.5f,
+                    Mode::Q2);
+  const int k = max(2, 3 / 11), rnd = 2 * 3 + 20;
+  const float c = max(100 - 3, 10);
+  sa.run(k, rnd, c);
+  auto res = sa.run2(k, rnd, c);
+  fp.restore(res.second);
+  fp.init();
+  int3 before = fp.cost();
+  local_descent(fp, 3, Mode::Q2, fp.W(), fp.H());
+  int3 after = fp.cost();
+  if (get<1>(before) <= fp.W() && get<2>(before) <= fp.H()) {
+    CHECK(get<1>(after) <= fp.W() && get<2>(after) <= fp.H(),
+          "M8b: descent keeps feasible when start feasible");
+  }
+}
+
+static void test_m8_descent_idempotent() {
+  write_m8_files();
+  srand(7);
+  {
+    ifstream fb("/tmp/m8.blocks");
+    ifstream fn("/tmp/m8.nets");
+    ifstream fpl("/tmp/m8.pl");
+    solve<short, int>(fn, fb, fpl, "/tmp/m8i1.rpt", 1, 3, 1, 0.5f, 0.15f,
+                      Mode::Q2, nullptr, false, 0.f, nullptr, true);
+  }
+  srand(7);
+  {
+    ifstream fb("/tmp/m8.blocks");
+    ifstream fn("/tmp/m8.nets");
+    ifstream fpl("/tmp/m8.pl");
+    solve<short, int>(fn, fb, fpl, "/tmp/m8i2.rpt", 1, 3, 1, 0.5f, 0.15f,
+                      Mode::Q2, nullptr, false, 0.f, nullptr, true);
+  }
+  auto no_time = [](const string& p) {
+    vector<string> v;
+    ifstream f(p);
+    string s;
+    while (getline(f, s)) v.push_back(s);
+    if (v.size() >= 5) v.erase(v.begin() + 4);
+    return v;
+  };
+  CHECK(no_time("/tmp/m8i1.rpt") == no_time("/tmp/m8i2.rpt"),
+        "M8c: descent run deterministic (bitwise, time excluded)");
+}
+
+static void test_m8_descent_deterministic() {
+  // 幂等：下降结果再下降一次不变
+  write_m8_files();
+  ifstream fb("/tmp/m8.blocks");
+  ifstream fn("/tmp/m8.nets");
+  ifstream fpl("/tmp/m8.pl");
+  FP fp(fn, fb, fpl, "", 1, 3, 1, 0.5f, 0.15f);
+  SA<short, int> sa(fp, 3, fp.W(), fp.H(), fp.R(), 0.9f, 0.5f, 0.1f, 0.5f,
+                    Mode::Q2);
+  const int k = max(2, 3 / 11), rnd = 2 * 3 + 20;
+  const float c = max(100 - 3, 10);
+  sa.run(k, rnd, c);
+  auto res = sa.run2(k, rnd, c);
+  fp.restore(res.second);
+  fp.init();
+  local_descent(fp, 3, Mode::Q2, fp.W(), fp.H());
+  int3 once = fp.cost();
+  local_descent(fp, 3, Mode::Q2, fp.W(), fp.H());
+  int3 twice = fp.cost();
+  CHECK(get<0>(once) == get<0>(twice), "M8d: second descent pass changes nothing");
+}
+
+static void test_m8_feas_only_layout() {
+  // M8e: feas-only 找到可行时，追加的块行必须构成轮廓内合法布局
+  ofstream fb("/tmp/m8e.blocks");
+  fb << "NumHardBlocks : 2\nNumTerminals : 0\n";
+  fb << "b1 block 4 (0,0) (0,10) (10,10) (10,0)\n";
+  fb << "b2 block 4 (0,0) (0,10) (10,10) (10,0)\n";
+  fb.close();
+  ofstream fn("/tmp/m8e.nets");
+  fn << "NumNets : 0\nNumPins : 0\n";
+  fn.close();
+  ofstream fpl("/tmp/m8e.pl");
+  fpl.close();
+  for (int seed : {1, 2, 3}) {
+    srand(seed);
+    {
+      ifstream fb2("/tmp/m8e.blocks");
+      ifstream fn2("/tmp/m8e.nets");
+      ifstream fpl2("/tmp/m8e.pl");
+      solve<short, int>(fn2, fb2, fpl2, "/tmp/m8e.rpt", 0, 2, 0, 0.5f, 1.0f,
+                        Mode::Q2, nullptr, true, 0.f, nullptr, false);
+    }
+    ifstream in("/tmp/m8e.rpt");
+    vector<string> lines;
+    string s;
+    while (getline(in, s)) lines.push_back(s);
+    int feas_flag = stoi(lines[0]);
+    int W, H;
+    {
+      istringstream iss(lines[1]);
+      iss >> W >> H;
+    }
+    int side = (int)ceil(sqrt(200 * 2.0));   // T=200, d=1.0 → side=20
+    if (feas_flag == 1) {
+      CHECK((int)lines.size() == 3 + 2, "M8e: feas rpt has 2 block lines");
+      bool legal = true;
+      for (size_t i = 3; i < lines.size() && legal; ++i) {
+        istringstream iss(lines[i]);
+        string name;
+        int x1, y1, x2, y2;
+        iss >> name >> x1 >> y1 >> x2 >> y2;
+        if (x2 > side || y2 > side) legal = false;
+      }
+      CHECK(legal && W <= side && H <= side,
+            "M8e: appended layout within outline");
+    }
+  }
+}
+
 int main() {
   cerr << "== M1: topology invariant ==\n";
   test_m1_valid_random_tree();
@@ -1713,6 +1885,12 @@ int main() {
   test_m7_explicit_order_tree();
   test_m7_init_order_end_to_end();
   test_m7_solve_with_init_order();
+  cerr << "== M8: local descent ==\n";
+  test_m8_descent_no_worse();
+  test_m8_descent_keeps_feasible();
+  test_m8_descent_idempotent();
+  test_m8_descent_deterministic();
+  test_m8_feas_only_layout();
   cerr << "--------------------------------\n";
   cerr << "PASS: " << g_pass << "  FAIL: " << g_fail << "\n";
   return g_fail ? 1 : 0;

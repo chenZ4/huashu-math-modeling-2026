@@ -26,6 +26,7 @@ int main(int argc, char** argv) {
   ofstream logfile;
   vector<string> init_order;
   bool has_init_order = false;
+  bool descent = false;
   for (int i = 7; i < argc; ++i) {
     if (string(argv[i]) == "--log" && i + 1 < argc) {
       logfile.open(argv[i + 1]);
@@ -33,6 +34,8 @@ int main(int argc, char** argv) {
       ++i;
     } else if (string(argv[i]) == "--feas-only") {
       feas_only = true;
+    } else if (string(argv[i]) == "--descent") {
+      descent = true;
     } else if (string(argv[i]) == "--seed" && i + 1 < argc) {
       seed = (unsigned)stoul(argv[i + 1]);
       ++i;
@@ -66,10 +69,10 @@ int main(int argc, char** argv) {
   if (Nblcks + Ntrmns + 2 < SHRT_MAX)
     solve<short, int>(fnets, fblcks, fpl, argv[6], Nnets, Nblcks, Ntrmns,
                       alpha, dead_ratio, mode, log, feas_only, t2_div,
-                      init_ptr);
+                      init_ptr, descent);
   else
     solve<int, int>(fnets, fblcks, fpl, argv[6], Nnets, Nblcks, Ntrmns,
                     alpha, dead_ratio, mode, log, feas_only, t2_div,
-                    init_ptr);
+                    init_ptr, descent);
   return 0;
 }
