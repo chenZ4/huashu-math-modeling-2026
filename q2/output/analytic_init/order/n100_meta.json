@@ -1,0 +1,25 @@
+{
+  "chip": "n100",
+  "mode": "order",
+  "side": 449,
+  "d_input": 0.12,
+  "params": {
+    "iters": 1200,
+    "seed": 42,
+    "tag": "q3_d12"
+  },
+  "git_sha": "e0dea47fcc4cc6121ea93d9837087b76de6d1ed1",
+  "numpy": "2.4.6",
+  "stats": {
+    "wl_lse": 196636.83358711054,
+    "wl_exact": 289565.07832534413,
+    "overflow_bin": 39.24259202402516,
+    "overflow_cap": 32.513677333801354,
+    "max_bin_density": 3.346465480567339,
+    "d_target": 0.8903775278892466,
+    "bbox_max": [
+      449.0,
+      449.0
+    ]
+  }
+}

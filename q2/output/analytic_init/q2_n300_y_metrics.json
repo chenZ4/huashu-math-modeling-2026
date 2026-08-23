@@ -1,0 +1,16 @@
+{
+  "chip": "n300",
+  "key": "y",
+  "rounds": 8,
+  "side": 561,
+  "t2_div": 70,
+  "n_legal": 7,
+  "n_illegal": 1,
+  "min": 563837.5,
+  "median": 834787.0,
+  "mean": 799430.6,
+  "max": 853755.0,
+  "spread_pct": 51.4,
+  "med_min_ratio": 1.48,
+  "git_sha": "e0dea47fcc4cc6121ea93d9837087b76de6d1ed1"
+}

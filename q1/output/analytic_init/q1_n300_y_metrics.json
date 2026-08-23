@@ -1,0 +1,11 @@
+{
+  "chip": "n300",
+  "key": "y",
+  "rounds": 8,
+  "min_area": 286332.0,
+  "median_area": 288294.0,
+  "mean_area": 288385.5,
+  "spread_pct": 1.6,
+  "best_aspect": 1.4395,
+  "git_sha": "e0dea47fcc4cc6121ea93d9837087b76de6d1ed1"
+}

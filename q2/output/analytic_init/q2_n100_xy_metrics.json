@@ -1,0 +1,18 @@
+{
+  "chip": "n100",
+  "key": "xy",
+  "rounds": 8,
+  "side": 455,
+  "t2_div": 35,
+  "n_legal": 8,
+  "n_illegal": 0,
+  "min": 284574.5,
+  "median": 300318.5,
+  "mean": 299114.9,
+  "max": 304333.5,
+  "std": 5852.9,
+  "spread_pct": 6.9,
+  "med_min_ratio": 1.06,
+  "git_sha": "e0dea47fcc4cc6121ea93d9837087b76de6d1ed1",
+  "order_file": "/Users/chen/Desktop/learn/The_7th_Huashu_Cup_College_Student_Mathematical_Modeling_Competition _in_2026/q2/output/analytic_init/order/order_n100_q2_d15_xy.txt"
+}
