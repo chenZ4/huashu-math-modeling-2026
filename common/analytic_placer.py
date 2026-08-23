@@ -115,15 +115,16 @@ def hpwl_of_rpt(rpt_path, blocks, terminals, nets):
 
 # ---------------- 梯度项 ----------------
 def _lse_wl_grad(pin_xy, gamma):
-    """pin_xy: (M,2)（含固定端子）。返回 (wl, gx(M,), gy(M,))。max 平移防溢出。"""
+    """pin_xy: (M,2)（含固定端子）。返回 (wl, gx(M,), gy(M,))。max 平移+指数截断防溢出。"""
     ax = np.asarray(pin_xy, dtype=np.float64)
     g = max(gamma, 1e-6)
     x, y = ax[:, 0], ax[:, 1]
     mx, my = x.max(), y.max()
-    ex = np.exp((x - mx) / g)
-    exn = np.exp((mx - x) / g)
-    ey = np.exp((y - my) / g)
-    eyn = np.exp((my - y) / g)
+    t = np.minimum((x - mx) / g, 40.0)
+    ex = np.exp(t)
+    exn = np.exp(np.minimum((mx - x) / g, 40.0))
+    ey = np.exp(np.minimum((y - my) / g, 40.0))
+    eyn = np.exp(np.minimum((my - y) / g, 40.0))
     wx = (mx + g * np.log(ex.sum())) - (mx - g * np.log(exn.sum()))
     wy = (my + g * np.log(ey.sum())) - (my - g * np.log(eyn.sum()))
     gx = ex / ex.sum() - exn / exn.sum()
@@ -213,9 +214,9 @@ def _rms_norm(g):
 
 
 # ---------------- 主流程 ----------------
-def analytic_place(blocks, terminals, nets, side, iters=600, gamma0=40.0,
-                   gamma_end=2.0, lam0=0.05, lam_ratio=1.02, lam_out=2.0,
-                   lam_c0=0.5, lr=0.02, mom=0.9, seed=42, nbins=12):
+def analytic_place(blocks, terminals, nets, side, iters=1200, gamma0=40.0,
+                   gamma_end=4.0, lam0=2.0, lam_ratio=1.008, lam_max=100.0,
+                   lam_c0=0.5, lr=0.02, mom=0.6, seed=42, nbins=12):
     rng = np.random.default_rng(seed)
     names = sorted(blocks.keys())
     N = len(names)
@@ -236,6 +237,10 @@ def analytic_place(blocks, terminals, nets, side, iters=600, gamma0=40.0,
                 f.append((float(terminals[pin][0]), float(terminals[pin][1])))
         net_var.append(v)
         net_fix.append(f)
+    deg = np.ones(N, dtype=np.float64)
+    for vv in net_var:
+        for ii in vv:
+            deg[ii] += 1.0
     T = float((dims[:, 0] * dims[:, 1]).sum())
     d_tar = T / (side * side)
     v = np.zeros_like(pos)
@@ -262,29 +267,27 @@ def analytic_place(blocks, terminals, nets, side, iters=600, gamma0=40.0,
             for j, ii in enumerate(vv):
                 g_wl[ii, 0] += gx[j]
                 g_wl[ii, 1] += gy[j]
+        g_wl /= deg[:, None]
         _, g_dens, excess = _density_grad(look, half, side, nbins, d_tar)
-        g_out, _ = _outline_grad(look, half, side)
-        g_c = look - np.array(tc)
-        g = (_rms_norm(g_wl)
-             + lam * _rms_norm(g_dens)
-             + lam_out * _rms_norm(g_out)
-             + lam_c * _rms_norm(g_c))
+        g_c = (look - np.array(tc)) / side
+        g = g_wl + lam * g_dens + lam_c * g_c
         v = np.clip(mom * v - lr * side * g, -2.0 * side, 2.0 * side)
-        pos = pos + v
-        pos = np.clip(pos, -side, 2.0 * side)
-        lam = min(lam * lam_ratio, 20.0)
+        pos = np.clip(pos + v, half, side - half)   # 投影回画布内
+        lam = min(lam * lam_ratio, lam_max)
         lam_c = max(lam_c * 0.985, 1e-3)
         gamma = max(gamma_end, gamma * 0.995)
     centers = {names[i]: (pos[i, 0], pos[i, 1]) for i in range(N)}
     wl_exact = hpwl_exact(centers, blocks, blocks, terminals, nets)
     D, _, excess = _density_grad(pos, half, side, nbins, d_tar)
     maxD = float(D.max())
+    overflow_cap = float(np.maximum(D - 1.0, 0.0).sum())
     xmax = (pos + half).max(axis=0)
     return {
         "pos": centers,
         "wl_lse": float(wl_total),
         "wl_exact": float(wl_exact),
         "overflow_bin": float(excess),
+        "overflow_cap": overflow_cap,
         "max_bin_density": maxD,
         "d_target": float(d_tar),
         "bbox_max": [float(xmax[0]), float(xmax[1])],
@@ -341,8 +344,15 @@ def main():
                     help=">1 视为绝对边长；<1 视为死区比例；缺省 sqrt(T)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--iters", type=int, default=600)
+    ap.add_argument("--iters", type=int, default=1200)
     ap.add_argument("--oracle-d", default="0.08,0.10,0.12,0.14,0.15")
+    ap.add_argument("--lr", type=float, default=0.02)
+    ap.add_argument("--lam0", type=float, default=2.0)
+    ap.add_argument("--lam-ratio", type=float, default=1.008)
+    ap.add_argument("--lam-max", type=float, default=100.0)
+    ap.add_argument("--gamma0", type=float, default=40.0)
+    ap.add_argument("--gamma-end", type=float, default=4.0)
+    ap.add_argument("--mom", type=float, default=0.6)
     args = ap.parse_args()
 
     blocks, terminals, nets = parse_instance(args.root, args.chip)
@@ -358,14 +368,21 @@ def main():
             jobs.append((side_from_d(T, d), d, f"oracle_{d}"))
     for side_abs, d_in, tag in jobs:
         stats = analytic_place(blocks, terminals, nets, side_abs,
-                               iters=args.iters, seed=args.seed)
+                               iters=args.iters, seed=args.seed,
+                               lr=args.lr, lam0=args.lam0,
+                               lam_ratio=args.lam_ratio, lam_max=args.lam_max,
+                               gamma0=args.gamma0, gamma_end=args.gamma_end,
+                               mom=args.mom)
         outdir = os.path.join(args.out, args.chip, tag)
         write_outputs(stats, blocks, outdir, args.chip, tag)
         write_meta(outdir, args.chip, side_abs, d_in, dict(
-            iters=args.iters, seed=args.seed), stats, args.mode)
+            iters=args.iters, seed=args.seed, lr=args.lr, lam0=args.lam0,
+            lam_ratio=args.lam_ratio, lam_max=args.lam_max,
+            gamma0=args.gamma0, gamma_end=args.gamma_end, mom=args.mom),
+            stats, args.mode)
         print(f"[{args.chip}] tag={tag} side={side_abs} "
               f"wl_exact={stats['wl_exact']:.1f} "
-              f"overflow={stats['overflow_bin']:.4f} "
+              f"overflow_cap={stats['overflow_cap']:.4f} "
               f"maxD={stats['max_bin_density']:.3f} "
               f"bbox={stats['bbox_max']}")
 

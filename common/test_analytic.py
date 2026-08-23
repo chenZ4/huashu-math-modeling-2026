@@ -102,8 +102,8 @@ def test_synthetic_convergence():
     nets = [["b0", "b1"]]
     side = 200.0
     st = ap.analytic_place(blocks, terminals, nets, side,
-                           iters=800, lam0=0.0, lam_out=1.0, lam_c0=0.0,
-                           lr=0.02, mom=0.9, seed=1)
+                           iters=800, lam0=0.0, lam_c0=0.0,
+                           lr=0.02, mom=0.6, seed=1)
     d = float(np.hypot(st["pos"]["b0"][0] - st["pos"]["b1"][0],
                        st["pos"]["b0"][1] - st["pos"]["b1"][1]))
     ok("final distance < side/8", d < side / 8, d)
@@ -124,14 +124,14 @@ def test_determinism():
 
 
 def test_oracle_consistency():
-    print("[T7] oracle 一致性：d=0.05 溢出 > d=0.15 溢出")
+    print("[T7] oracle 一致性：d=0.05 超容量溢出 > d=0.15 超容量溢出")
     b, t, n = ap.parse_instance(ROOT, "n100")
     T = float(sum(w * h for w, h in b.values()))
     o5 = ap.analytic_place(b, t, n, ap.side_from_d(T, 0.05), iters=400, seed=3)
     o15 = ap.analytic_place(b, t, n, ap.side_from_d(T, 0.15), iters=400, seed=3)
-    ok("overflow(d=0.15) <= overflow(d=0.05)",
-       o15["overflow_bin"] <= o5["overflow_bin"],
-       (o15["overflow_bin"], o5["overflow_bin"]))
+    ok("overflow_cap(d=0.15) <= overflow_cap(d=0.05)",
+       o15["overflow_cap"] <= o5["overflow_cap"],
+       (o15["overflow_cap"], o5["overflow_cap"]))
 
 
 if __name__ == "__main__":
