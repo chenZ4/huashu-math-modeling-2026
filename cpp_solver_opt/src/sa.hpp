@@ -302,9 +302,14 @@ void solve(ifstream& fnets, ifstream& fblcks, ifstream& fpl,
            const string& rpt, int Nnets, int Nblcks, int Ntrmns,
            float alpha, float dead_ratio, Mode mode = Mode::Q2,
            ostream* log = nullptr, bool feas_only = false,
-           float t2_div = 0.f) {
+           float t2_div = 0.f,
+           const vector<string>* init_order = nullptr) {
   FLOOR_PLAN<ID, LEN> fp(fnets, fblcks, fpl, rpt, Nnets, Nblcks, Ntrmns,
                          alpha, dead_ratio, mode == Mode::Q1);
+  if (init_order && !fp.set_init_order(*init_order)) {
+    cerr << "solve: invalid --init-order (count mismatch / unknown / duplicate block)\n";
+    exit(1);
+  }
   float P = 0.9f, alpha_base = 0.5f, beta = 0.1f;
   const float R = fp.R();
   int k = max(2, Nblcks / 11), rnd = 2 * Nblcks + 20;

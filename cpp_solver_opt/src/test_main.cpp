@@ -1559,6 +1559,89 @@ static void test_q2_end_to_end_hpwl() {
   CHECK(verify_layout_definition(fp, Nblcks, err), "T3: Q2 SA result legal: " + err);
 }
 
+// ===================== M7: --init-order =====================
+static void test_m7_explicit_order_tree() {
+  TR t(4, {2, 4, 1, 3});          // 堆布局：root=2, L(2)=4, R(2)=1, L(4)=3
+  string err;
+  CHECK(t.validate_tree(err), "M7: explicit-order tree valid: " + err);
+  TR t5(5, {3, 1, 2, 5, 4});
+  CHECK(t5.validate_tree(err), "M7: 5-node explicit tree valid: " + err);
+}
+
+static void test_m7_init_order_end_to_end() {
+  ofstream fb("/tmp/m7.blocks");
+  fb << "NumHardBlocks : 3\nNumTerminals : 0\n";
+  fb << "b1 block 4 (0,0) (0,10) (10,10) (10,0)\n";
+  fb << "b2 block 4 (0,0) (0,20) (20,20) (20,0)\n";
+  fb << "b3 block 4 (0,0) (0,30) (30,30) (30,0)\n";
+  fb.close();
+  ofstream fn("/tmp/m7.nets");
+  fn << "NumNets : 0\nNumPins : 0\n";
+  fn.close();
+  ofstream fpl("/tmp/m7.pl");
+  fpl.close();
+  {
+    ifstream fb2("/tmp/m7.blocks");
+    ifstream fn2("/tmp/m7.nets");
+    ifstream fpl2("/tmp/m7.pl");
+    FP fp(fn2, fb2, fpl2, "", 0, 3, 0, 0.5f, 0.15f);
+    CHECK(fp.set_init_order({"b3", "b1", "b2"}), "M7: valid order accepted");
+    fp.init();
+    const FP::BLOCK& root = fp.blk(3);   // b3 为序列首 → 树根 → (0,0)
+    CHECK(root._x == 0 && root._y == 0, "M7: first-in-order block is root at origin");
+    string err;
+    CHECK(fp.tree().validate_tree(err), "M7: tree valid after init: " + err);
+  }
+  {
+    ifstream fb2("/tmp/m7.blocks");
+    ifstream fn2("/tmp/m7.nets");
+    ifstream fpl2("/tmp/m7.pl");
+    FP fp(fn2, fb2, fpl2, "", 0, 3, 0, 0.5f, 0.15f);
+    CHECK(!fp.set_init_order({"b3", "b1"}), "M7: count mismatch rejected");
+    CHECK(!fp.set_init_order({"b3", "b1", "bx"}), "M7: unknown block rejected");
+    CHECK(!fp.set_init_order({"b3", "b1", "b1"}), "M7: duplicate rejected");
+    CHECK(!fp.set_init_order({"b3", "b1", "b4"}), "M7: out-of-range id rejected");
+  }
+}
+
+static void test_m7_solve_with_init_order() {
+  ofstream fb("/tmp/m7s.blocks");
+  fb << "NumHardBlocks : 2\nNumTerminals : 1\n";
+  fb << "b1 block 4 (0,0) (0,10) (10,10) (10,0)\n";
+  fb << "b2 block 4 (0,0) (0,20) (20,20) (20,0)\n";
+  fb << "p1 terminal\n";
+  fb.close();
+  ofstream fn("/tmp/m7s.nets");
+  fn << "NumNets : 1\nNumPins : 2\nNetDegree : 2\nb1\np1\n";
+  fn.close();
+  ofstream fpl("/tmp/m7s.pl");
+  fpl << "p1 0 0\n";
+  fpl.close();
+  vector<string> order = {"b2", "b1"};
+  {
+    ifstream fb2("/tmp/m7s.blocks");
+    ifstream fn2("/tmp/m7s.nets");
+    ifstream fpl2("/tmp/m7s.pl");
+    solve<short, int>(fn2, fb2, fpl2, "/tmp/m7s.rpt", 1, 2, 1, 0.5f, 0.15f,
+                      Mode::Q2, nullptr, false, 0.f, &order);
+  }
+  ifstream rpt("/tmp/m7s.rpt");
+  string line;
+  int nlines = 0;
+  while (getline(rpt, line)) ++nlines;
+  CHECK(nlines >= 6, "M7: solve with init-order writes rpt (2 blocks + headers)");
+  // 越界轮廓极端小 → 也必须有输出（不挂死）
+  {
+    ifstream fb2("/tmp/m7s.blocks");
+    ifstream fn2("/tmp/m7s.nets");
+    ifstream fpl2("/tmp/m7s.pl");
+    solve<short, int>(fn2, fb2, fpl2, "/tmp/m7s2.rpt", 1, 2, 1, 0.5f, 0.01f,
+                      Mode::Q2, nullptr, true, 0.f, &order);
+  }
+  ifstream rpt2("/tmp/m7s2.rpt");
+  CHECK((bool)rpt2, "M7: feas-only with init-order writes rpt");
+}
+
 int main() {
   cerr << "== M1: topology invariant ==\n";
   test_m1_valid_random_tree();
@@ -1626,6 +1709,10 @@ int main() {
   test_q2_run_snapshots();
   test_q2_feas_only();
   test_q2_end_to_end_hpwl();
+  cerr << "== M7: --init-order ==\n";
+  test_m7_explicit_order_tree();
+  test_m7_init_order_end_to_end();
+  test_m7_solve_with_init_order();
   cerr << "--------------------------------\n";
   cerr << "PASS: " << g_pass << "  FAIL: " << g_fail << "\n";
   return g_fail ? 1 : 0;

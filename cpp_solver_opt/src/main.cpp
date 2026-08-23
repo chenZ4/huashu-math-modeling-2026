@@ -24,6 +24,8 @@ int main(int argc, char** argv) {
   unsigned seed = (unsigned)time(NULL);
   ostream* log = nullptr;
   ofstream logfile;
+  vector<string> init_order;
+  bool has_init_order = false;
   for (int i = 7; i < argc; ++i) {
     if (string(argv[i]) == "--log" && i + 1 < argc) {
       logfile.open(argv[i + 1]);
@@ -36,6 +38,16 @@ int main(int argc, char** argv) {
       ++i;
     } else if (string(argv[i]) == "--t2-div" && i + 1 < argc) {
       t2_div = stof(argv[i + 1]);
+      ++i;
+    } else if (string(argv[i]) == "--init-order" && i + 1 < argc) {
+      ifstream ofile(argv[i + 1]);
+      if (!ofile) {
+        cerr << "cannot open --init-order file: " << argv[i + 1] << '\n';
+        return 1;
+      }
+      string tok;
+      while (ofile >> tok) init_order.push_back(tok);
+      has_init_order = true;
       ++i;
     } else {
       dead_ratio = stof(argv[i]);
@@ -50,11 +62,14 @@ int main(int argc, char** argv) {
   int Ntrmns = read_labeled_int(fblcks);
   fnets.seekg(0);
   fblcks.seekg(0);
+  const vector<string>* init_ptr = has_init_order ? &init_order : nullptr;
   if (Nblcks + Ntrmns + 2 < SHRT_MAX)
     solve<short, int>(fnets, fblcks, fpl, argv[6], Nnets, Nblcks, Ntrmns,
-                      alpha, dead_ratio, mode, log, feas_only, t2_div);
+                      alpha, dead_ratio, mode, log, feas_only, t2_div,
+                      init_ptr);
   else
     solve<int, int>(fnets, fblcks, fpl, argv[6], Nnets, Nblcks, Ntrmns,
-                    alpha, dead_ratio, mode, log, feas_only, t2_div);
+                    alpha, dead_ratio, mode, log, feas_only, t2_div,
+                    init_ptr);
   return 0;
 }

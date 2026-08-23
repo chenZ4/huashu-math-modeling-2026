@@ -113,6 +113,26 @@ public:
     _tree.init(_blcks);
     _has_init = true;
   }
+  // --init-order：在首次 init() 前设置初始序列（名称→ID→显式树）。
+  // 校验：数量必须等于 Nblcks、不得重复或缺失，失败返回 false 且不改状态。
+  bool set_init_order(const vector<string>& names) {
+    if (names.size() != _Nblcks) return false;
+    vector<ID> ids;
+    ids.reserve(names.size());
+    for (const string& n : names) {
+      auto it = _blcks_id.find(n);
+      if (it == _blcks_id.end()) return false;
+      ids.push_back(it->second);
+    }
+    sort(ids.begin(), ids.end());
+    for (ID i = 1; i <= _Nblcks; ++i)
+      if (ids[i - 1] != i) return false;
+    vector<ID> order;
+    order.reserve(names.size());
+    for (const string& n : names) order.push_back(_blcks_id[n]);
+    _tree = TREE(_Nblcks, order);
+    return true;
+  }
   int3 cost(bool get_area = true, bool get_hpwl = true) const {
     LEN MAX_X = 0, MAX_Y = 0;
     if (get_area) {
@@ -333,6 +353,17 @@ public:
       if (i * 2 + 1 <= Nblcks) _nodes[id].s_r(_tree[i * 2 + 1]);
     }
     _nodes[0].s_p(_tree[1]);
+  }
+  TREE(ID Nblcks, const vector<ID>& order) {
+    // 显式初始序列（--init-order）：order 长度 Nblcks，堆式布局同默认构造
+    _nodes.resize(Nblcks + 1);
+    for (ID i = 1; i <= Nblcks; ++i) {
+      ID id = order[i - 1];
+      _nodes[id].s_p((i == 1) ? 0 : order[i / 2 - 1]);
+      if (i * 2 <= Nblcks) _nodes[id].s_l(order[i * 2 - 1]);
+      if (i * 2 + 1 <= Nblcks) _nodes[id].s_r(order[i * 2]);
+    }
+    _nodes[0].s_p(order[0]);
   }
 #ifdef TREE_DEBUG
   TREE(ID Nblcks, const vector<ID>& P, const vector<ID>& L, const vector<ID>& R) {
