@@ -1,0 +1,12 @@
+{
+  "chip": "n300",
+  "tag": "boost",
+  "n_legal": 25,
+  "n_illegal": 25,
+  "min": 557808.5,
+  "median": 576394.5,
+  "spread_pct": 9.3,
+  "alpha": 0.1,
+  "t2_div": 70,
+  "git_sha": "a5c900e74f22717ddbc3de9c7830106b99474ac6"
+}

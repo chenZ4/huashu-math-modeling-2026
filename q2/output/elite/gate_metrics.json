@@ -1,0 +1,22 @@
+{
+  "elite": {
+    "chip": "n100",
+    "tag": "elite",
+    "n_legal": 7,
+    "n_illegal": 1,
+    "min": 230605.0,
+    "median": 236092.5,
+    "spread_pct": 6.9
+  },
+  "rand": {
+    "chip": "n100",
+    "tag": "rand",
+    "n_legal": 8,
+    "n_illegal": 0,
+    "min": 224442.5,
+    "median": 234796.5,
+    "spread_pct": 6.6
+  },
+  "gate_pass": false,
+  "git_sha": "a5c900e74f22717ddbc3de9c7830106b99474ac6"
+}

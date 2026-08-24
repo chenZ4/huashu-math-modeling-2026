@@ -1,0 +1,7 @@
+{
+  "conclusion": "warm-start chain FAILED: L2 full-solve with warm order produced massively infeasible layouts (n100 d=0.0773 -> bbox 321x1904). Warm order from larger-outline layout traps SA (heap-mapping pathology, same as T2 x-order). Q3 final values unchanged.",
+  "samples": {
+    "n100_d0.077344": "321x1904 infeasible",
+    "n200_d0.084375": "223x2306 infeasible"
+  }
+}
