@@ -23,7 +23,13 @@
 > n300 新纪录 q2/output/elite/q2_n300_boost3_r602.rpt；均过 verify+HPWL 金标准。
 > n200 未破（380261.0 保持）。
 
-数据源: `q2/output/final/q2_metrics.csv` / `q2/output/final/q2_<chip>.rpt`
+数据源（定稿口径 = 表3）：
+- n100 = `q2/output/alpha_scan/q2_n100_a0.1_t270_r106.rpt`（α×t2 扫描纪录）
+- n200 = `q2/output/final/q2_n200.rpt`（final 即定稿）
+- n300 = `q2/output/elite/q2_n300_boost3_r602.rpt`（elite 挂机纪录）
+- ⚠️ `q2/output/final/q2_n{100,300}.rpt` 与 `q2_metrics.csv` 存的是**后处理前**数值
+  （225403.5 / 380261 / 530944.5），引用时勿与定稿口径混用。
+- 全部数值已用金标准独立重算复核（verify 合法性 + HPWL 逐位一致）。
 
 ## Q3 最小死区比例（判定种子 15/15/10 + 双向确认，全部 confirmed=True）
 | 芯片 | 判定种子 | d* | 轮廓 side | HPWL | 确认通过 | 合法性 |
@@ -47,7 +53,7 @@
 | 问 | n100 | n200 | n300 |
 |---|---|---|---|
 | Q1 面积 | 0% | -0.40% | -0.77% |
-| Q2 HPWL | -4.16% | -5.71% | -7.55% |
+| Q2 HPWL | -12.0% | -5.71% | -9.63% |
 | Q3 d* | -35.2% | -22.8%（待最终确认） | -10.5% |
 
 ## 结果溯源（论文引用 → 文件 → 复现）
