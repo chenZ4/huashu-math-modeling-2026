@@ -711,12 +711,12 @@ static void test_o5_sa_reproducible_and_monotone() {
   const float c = 100 - N;
   srand(1234);
   FP fp1 = make_fp(specs, 1000, 1000);
-  SA<short, int> sa1(fp1, N, fp1.W(), fp1.H(), fp1.R(), 0.9f, 0.5f, 0.1f, 0.5f);
+  SA<FP, short, int> sa1(fp1, N, fp1.W(), fp1.H(), fp1.R(), 0.9f, 0.5f, 0.1f, 0.5f);
   sa1.run(k, rnd, c);
   auto res1 = sa1.run2(k, rnd, c);
   srand(1234);
   FP fp2 = make_fp(specs, 1000, 1000);
-  SA<short, int> sa2(fp2, N, fp2.W(), fp2.H(), fp2.R(), 0.9f, 0.5f, 0.1f, 0.5f);
+  SA<FP, short, int> sa2(fp2, N, fp2.W(), fp2.H(), fp2.R(), 0.9f, 0.5f, 0.1f, 0.5f);
   sa2.run(k, rnd, c);
   auto res2 = sa2.run2(k, rnd, c);
   CHECK(res1.first == res2.first, "O5 reproducible final cost");
@@ -755,7 +755,7 @@ static void test_o5_vs_bruteforce() {
     for (int i = 1; i <= N; ++i)
       specs.emplace_back(wh[i - 1].first, wh[i - 1].second, "B" + to_string(i));
     FP fp = make_fp(specs, 10000, 10000);
-    SA<short, int> sa(fp, N, 10000, 10000, 1.0f, 0.9f, 0.5f, 0.1f, 0.5f);
+    SA<FP, short, int> sa(fp, N, 10000, 10000, 1.0f, 0.9f, 0.5f, 0.1f, 0.5f);
     const int k = 2, rnd = 2 * N + 20;
     sa.run(k, rnd, 96);
     auto res = sa.run2(k, rnd, 96);
@@ -782,7 +782,7 @@ static void test_o5_end_to_end_n100() {
   int Ntrmns = read_labeled_int(fblcks);
   fnets.seekg(0);
   fblcks.seekg(0);
-  solve<short, int>(fnets, fblcks, fpl, "/tmp/o5_e2e.rpt", Nnets, Nblcks, Ntrmns,
+  solve<FLOOR_PLAN, short, int>(fnets, fblcks, fpl, "/tmp/o5_e2e.rpt", Nnets, Nblcks, Ntrmns,
                     0.5f, 0.15f);
   ifstream in("/tmp/o5_e2e.rpt");
   string text((istreambuf_iterator<char>(in)), istreambuf_iterator<char>());
@@ -1215,7 +1215,7 @@ static void test_d4_sa_numerics() {
   vector<tuple<int, int, string>> specs;
   for (int i = 1; i <= N; ++i) specs.emplace_back(1 + rand() % 25, 1 + rand() % 25, "B" + to_string(i));
   FP fp = make_fp(specs, 1000, 1000);
-  SA<short, int> sa(fp, N, fp.W(), fp.H(), fp.R(), 0.9f, 0.5f, 0.1f, 0.5f);
+  SA<FP, short, int> sa(fp, N, fp.W(), fp.H(), fp.R(), 0.9f, 0.5f, 0.1f, 0.5f);
   sa.run(1, 2 * N + 20, 1000.0f);
   sa.run2(1, 2 * N + 20, 1000.0f);
   bool finite = true;
@@ -1260,7 +1260,7 @@ static void test_f1_infeasible_outline_terminates() {
   }
   int tiny = (int)ceil(sqrt((double)total / 2.0));
   FP fp = make_fp(specs, tiny, tiny);
-  SA<short, int> sa(fp, N, fp.W(), fp.H(), fp.R(), 0.9f, 0.5f, 0.1f, 0.5f);
+  SA<FP, short, int> sa(fp, N, fp.W(), fp.H(), fp.R(), 0.9f, 0.5f, 0.1f, 0.5f);
   sa.run(2, 2 * N + 20, 100 - N);
   CHECK(true, "T1: run() terminates on infeasible outline (reset bound)");
   auto res = sa.run2(2, 2 * N + 20, 100 - N);
@@ -1351,7 +1351,7 @@ static void test_q1_cost_oracle() {
     specs.emplace_back(1 + rand() % 20, 1 + rand() % 20, "B" + to_string(i));
   FP fp = make_fp(specs, 10000, 10000);
   const float lambda = 0.7f;
-  SA<short, int> sa(fp, N, fp.W(), fp.H(), fp.R(), 0.9f, 0.5f, 0.1f, lambda, Mode::Q1);
+  SA<FP, short, int> sa(fp, N, fp.W(), fp.H(), fp.R(), 0.9f, 0.5f, 0.1f, lambda, Mode::Q1);
   CHECK(sa.dbg_q1_avg_area() > 0, "Q1: avg area normalizer positive");
   CHECK(sa.dbg_q1_avg_pen() > 0, "Q1: avg aspect-penalty normalizer positive");
   fp.init();
@@ -1382,7 +1382,7 @@ static void test_q1_end_to_end_and_log() {
     specs.emplace_back(wh[i - 1].first, wh[i - 1].second, "B" + to_string(i));
   FP fp = make_fp(specs, 10000, 10000);
   ostringstream log;
-  SA<short, int> sa(fp, N, 10000, 10000, 1.0f, 0.9f, 0.5f, 0.1f, 0.5f, Mode::Q1, &log);
+  SA<FP, short, int> sa(fp, N, 10000, 10000, 1.0f, 0.9f, 0.5f, 0.1f, 0.5f, Mode::Q1, &log);
   const int k = 4, rnd = 3 * N + 40;
   auto res = sa.run2(k, rnd, 96.0f);
   auto res2 = sa.run2(k, rnd, 96.0f);
@@ -1434,7 +1434,7 @@ static void test_q1_snapshots() {
     specs.emplace_back(1 + rand() % 10, 1 + rand() % 10, "B" + to_string(i));
   FP fp = make_fp(specs, 1000, 1000);
   ostringstream log;
-  SA<short, int> sa(fp, N, 1000, 1000, 1.0f, 0.9f, 0.5f, 0.1f, 0.5f, Mode::Q1, &log);
+  SA<FP, short, int> sa(fp, N, 1000, 1000, 1.0f, 0.9f, 0.5f, 0.1f, 0.5f, Mode::Q1, &log);
   sa.run2(2, 2 * N + 20, 90.0f);
   istringstream ls(log.str());
   string tok;
@@ -1478,7 +1478,7 @@ static void test_q2_run_snapshots() {
     specs.emplace_back(1 + rand() % 15, 1 + rand() % 15, "B" + to_string(i));
   FP fp = make_fp(specs, 1000, 1000);
   ostringstream log;
-  SA<short, int> sa(fp, N, 1000, 1000, 1.0f, 0.9f, 0.5f, 0.1f, 0.5f, Mode::Q2, &log);
+  SA<FP, short, int> sa(fp, N, 1000, 1000, 1.0f, 0.9f, 0.5f, 0.1f, 0.5f, Mode::Q2, &log);
   sa.run(2, 2 * N + 20, 90.0f);
   CHECK(sa.last_feasible(), "T1: Q2 run found feasible solution");
   istringstream ls(log.str());
@@ -1521,14 +1521,14 @@ static void test_q2_feas_only() {
   }
   {
     FP fp = make_fp(specs, 1000, 1000);
-    SA<short, int> sa(fp, N, 1000, 1000, 1.0f, 0.9f, 0.5f, 0.1f, 0.5f, Mode::Q2);
+    SA<FP, short, int> sa(fp, N, 1000, 1000, 1.0f, 0.9f, 0.5f, 0.1f, 0.5f, Mode::Q2);
     sa.run(2, 2 * N + 20, 90.0f);
     CHECK(sa.last_feasible(), "T2: feasible instance -> last_feasible true");
   }
   {
     int tiny = (int)ceil(sqrt((double)total / 2.0));
     FP fp = make_fp(specs, tiny, tiny);
-    SA<short, int> sa(fp, N, tiny, tiny, 1.0f, 0.9f, 0.5f, 0.1f, 0.5f, Mode::Q2);
+    SA<FP, short, int> sa(fp, N, tiny, tiny, 1.0f, 0.9f, 0.5f, 0.1f, 0.5f, Mode::Q2);
     sa.run(2, 2 * N + 20, 90.0f);
     CHECK(!sa.last_feasible(), "T2: infeasible instance -> last_feasible false");
     string err;
@@ -1547,7 +1547,7 @@ static void test_q2_end_to_end_hpwl() {
   fnets.seekg(0);
   fblcks.seekg(0);
   FP fp(fnets, fblcks, fpl, "", Nnets, Nblcks, Ntrmns, 0.5f, 0.15f);
-  SA<short, int> sa(fp, Nblcks, fp.W(), fp.H(), fp.R(), 0.9f, 0.5f, 0.1f, 0.5f, Mode::Q2);
+  SA<FP, short, int> sa(fp, Nblcks, fp.W(), fp.H(), fp.R(), 0.9f, 0.5f, 0.1f, 0.5f, Mode::Q2);
   const int k = max(2, Nblcks / 11), rnd = 2 * Nblcks + 20;
   const float c = max(100 - int(Nblcks), 10);
   sa.run(k, rnd, c);
@@ -1622,7 +1622,7 @@ static void test_m7_solve_with_init_order() {
     ifstream fb2("/tmp/m7s.blocks");
     ifstream fn2("/tmp/m7s.nets");
     ifstream fpl2("/tmp/m7s.pl");
-    solve<short, int>(fn2, fb2, fpl2, "/tmp/m7s.rpt", 1, 2, 1, 0.5f, 0.15f,
+    solve<FLOOR_PLAN, short, int>(fn2, fb2, fpl2, "/tmp/m7s.rpt", 1, 2, 1, 0.5f, 0.15f,
                       Mode::Q2, nullptr, false, 0.f, &order);
   }
   ifstream rpt("/tmp/m7s.rpt");
@@ -1635,7 +1635,7 @@ static void test_m7_solve_with_init_order() {
     ifstream fb2("/tmp/m7s.blocks");
     ifstream fn2("/tmp/m7s.nets");
     ifstream fpl2("/tmp/m7s.pl");
-    solve<short, int>(fn2, fb2, fpl2, "/tmp/m7s2.rpt", 1, 2, 1, 0.5f, 0.01f,
+    solve<FLOOR_PLAN, short, int>(fn2, fb2, fpl2, "/tmp/m7s2.rpt", 1, 2, 1, 0.5f, 0.01f,
                       Mode::Q2, nullptr, true, 0.f, &order);
   }
   ifstream rpt2("/tmp/m7s2.rpt");
@@ -1675,7 +1675,7 @@ static void test_m8_descent_no_worse() {
       ifstream fb("/tmp/m8.blocks");
       ifstream fn("/tmp/m8.nets");
       ifstream fpl("/tmp/m8.pl");
-      solve<short, int>(fn, fb, fpl, "/tmp/m8a.rpt", 1, 3, 1, 0.5f, 0.15f,
+      solve<FLOOR_PLAN, short, int>(fn, fb, fpl, "/tmp/m8a.rpt", 1, 3, 1, 0.5f, 0.15f,
                         Mode::Q2, nullptr, false, 0.f, nullptr, true);
     }
     srand(42);
@@ -1683,7 +1683,7 @@ static void test_m8_descent_no_worse() {
       ifstream fb("/tmp/m8.blocks");
       ifstream fn("/tmp/m8.nets");
       ifstream fpl("/tmp/m8.pl");
-      solve<short, int>(fn, fb, fpl, "/tmp/m8b.rpt", 1, 3, 1, 0.5f, 0.15f,
+      solve<FLOOR_PLAN, short, int>(fn, fb, fpl, "/tmp/m8b.rpt", 1, 3, 1, 0.5f, 0.15f,
                         Mode::Q2, nullptr, false, 0.f, nullptr, false);
     }
     CHECK(m8_line2("/tmp/m8a.rpt") <= m8_line2("/tmp/m8b.rpt"),
@@ -1697,7 +1697,7 @@ static void test_m8_descent_keeps_feasible() {
   ifstream fn("/tmp/m8.nets");
   ifstream fpl("/tmp/m8.pl");
   FP fp(fn, fb, fpl, "", 1, 3, 1, 0.5f, 0.15f);
-  SA<short, int> sa(fp, 3, fp.W(), fp.H(), fp.R(), 0.9f, 0.5f, 0.1f, 0.5f,
+  SA<FP, short, int> sa(fp, 3, fp.W(), fp.H(), fp.R(), 0.9f, 0.5f, 0.1f, 0.5f,
                     Mode::Q2);
   const int k = max(2, 3 / 11), rnd = 2 * 3 + 20;
   const float c = max(100 - 3, 10);
@@ -1721,7 +1721,7 @@ static void test_m8_descent_idempotent() {
     ifstream fb("/tmp/m8.blocks");
     ifstream fn("/tmp/m8.nets");
     ifstream fpl("/tmp/m8.pl");
-    solve<short, int>(fn, fb, fpl, "/tmp/m8i1.rpt", 1, 3, 1, 0.5f, 0.15f,
+    solve<FLOOR_PLAN, short, int>(fn, fb, fpl, "/tmp/m8i1.rpt", 1, 3, 1, 0.5f, 0.15f,
                       Mode::Q2, nullptr, false, 0.f, nullptr, true);
   }
   srand(7);
@@ -1729,7 +1729,7 @@ static void test_m8_descent_idempotent() {
     ifstream fb("/tmp/m8.blocks");
     ifstream fn("/tmp/m8.nets");
     ifstream fpl("/tmp/m8.pl");
-    solve<short, int>(fn, fb, fpl, "/tmp/m8i2.rpt", 1, 3, 1, 0.5f, 0.15f,
+    solve<FLOOR_PLAN, short, int>(fn, fb, fpl, "/tmp/m8i2.rpt", 1, 3, 1, 0.5f, 0.15f,
                       Mode::Q2, nullptr, false, 0.f, nullptr, true);
   }
   auto no_time = [](const string& p) {
@@ -1751,7 +1751,7 @@ static void test_m8_descent_deterministic() {
   ifstream fn("/tmp/m8.nets");
   ifstream fpl("/tmp/m8.pl");
   FP fp(fn, fb, fpl, "", 1, 3, 1, 0.5f, 0.15f);
-  SA<short, int> sa(fp, 3, fp.W(), fp.H(), fp.R(), 0.9f, 0.5f, 0.1f, 0.5f,
+  SA<FP, short, int> sa(fp, 3, fp.W(), fp.H(), fp.R(), 0.9f, 0.5f, 0.1f, 0.5f,
                     Mode::Q2);
   const int k = max(2, 3 / 11), rnd = 2 * 3 + 20;
   const float c = max(100 - 3, 10);
@@ -1784,7 +1784,7 @@ static void test_m8_feas_only_layout() {
       ifstream fb2("/tmp/m8e.blocks");
       ifstream fn2("/tmp/m8e.nets");
       ifstream fpl2("/tmp/m8e.pl");
-      solve<short, int>(fn2, fb2, fpl2, "/tmp/m8e.rpt", 0, 2, 0, 0.5f, 1.0f,
+      solve<FLOOR_PLAN, short, int>(fn2, fb2, fpl2, "/tmp/m8e.rpt", 0, 2, 0, 0.5f, 1.0f,
                         Mode::Q2, nullptr, true, 0.f, nullptr, false);
     }
     ifstream in("/tmp/m8e.rpt");

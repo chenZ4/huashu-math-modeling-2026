@@ -11,16 +11,16 @@
 
 enum class Mode { Q1, Q2 };
 
-template<typename ID, typename LEN>
+template<typename FP, typename ID, typename LEN>
 class SA {
 public:
-  SA(FLOOR_PLAN<ID, LEN>& fp, ID Nblcks, int W, int H, float R, float P,
+  SA(FP& fp, ID Nblcks, int W, int H, float R, float P,
      float alpha_base, float beta, float true_alpha, Mode mode = Mode::Q2,
-     ostream* log = nullptr, float t2_div = 0.f)
+     ostream* log = nullptr, float t2_div = 0.f, bool accept_all = false)
     : _fp(fp), _best_sol(fp.get_tree()), _Nblcks(Nblcks), _N(Nblcks),
       _W(W), _H(H), _alpha_base(alpha_base), _R(R), _true_alpha(true_alpha),
       _alpha(alpha_base), _beta(beta), _N_feas(0), _mode(mode), _log(log),
-      _t2_div(t2_div) {
+      _t2_div(t2_div), _accept_all(accept_all) {
     _fp.init();
     vector<int3> costs(_N + 1);
     costs[0] = _fp.cost();
@@ -69,7 +69,7 @@ public:
     _best_cost = prv_cost;
     dbg_push(_best_cost);
     int rej_num = 0, cnt = 1;
-    typename FLOOR_PLAN<ID, LEN>::TREE last_sol = _fp.get_tree();
+    typename FP::TREE last_sol = _fp.get_tree();
     while (!done && (_T > temp_th || float(rej_num) <= rej_ratio * cnt || !tot_feas)) {
       if (tot_feas) _beta += 0.01;
       float avg_delta_cost = 0;
@@ -91,7 +91,8 @@ public:
         } else _recs.push_back(false);
         _alpha = _alpha_base + (1 - _alpha_base) * float(_N_feas) / float(_N);
 
-        if (delta_cost <= 0 || randf() < expf(-delta_cost / _T) || tot_feas == 1) {
+        if (_accept_all || delta_cost <= 0 || randf() < expf(-delta_cost / _T)
+            || tot_feas == 1) {
           prv_cost = cost;
           last_sol = _fp.get_tree();
           if (feas(costs)) {
@@ -134,7 +135,7 @@ public:
     _last_feasible = (tot_feas > 0);
     dbg_snapshots();
   }
-  pair<float, typename FLOOR_PLAN<ID, LEN>::TREE>
+  pair<float, typename FP::TREE>
   run2(const int k, int rnd, const float c) {
     float _init_T2 = _init_T / ((_t2_div > 0.f) ? _t2_div
                                  : ((_mode == Mode::Q1) ? 20.f : 50.f));
@@ -149,7 +150,7 @@ public:
     _dbg_hist.push_back(-1.0f);
 #endif
     dbg_push(_best_cost);
-    typename FLOOR_PLAN<ID, LEN>::TREE last_sol = _best_sol;
+    typename FP::TREE last_sol = _best_sol;
     while (_T > temp_th || float(rej_num) <= rej_ratio * cnt || !tot_feas) {
       float avg_delta_cost = 0;
       rej_num = 0, cnt = 1;
@@ -161,7 +162,7 @@ public:
         float delta_cost = (cost - prv_cost);
         avg_delta_cost += abs(delta_cost);
 
-        if (delta_cost <= 0 || randf() < expf(-delta_cost / _T)) {
+        if (_accept_all || delta_cost <= 0 || randf() < expf(-delta_cost / _T)) {
           prv_cost = cost;
           last_sol = _fp.get_tree();
           if (feas(costs)) {
@@ -277,8 +278,8 @@ private:
     return (get<1>(cost) <= _W && get<2>(cost) <= _H);
   }
   float randf() const { return float(rand()) / float(RAND_MAX); }
-  FLOOR_PLAN<ID, LEN>& _fp;
-  typename FLOOR_PLAN<ID, LEN>::TREE _best_sol;
+  FP& _fp;
+  typename FP::TREE _best_sol;
   float _best_cost;
   const ID _Nblcks, _N;
   const int _W, _H;
@@ -289,17 +290,17 @@ private:
   Mode _mode;
   ostream* _log;
   float _t2_div;
-  bool _last_feasible = false;
+  bool _accept_all, _last_feasible = false;
   vector<int> _snap_iters;
-  vector<typename FLOOR_PLAN<ID, LEN>::TREE> _snap_trees;
+  vector<typename FP::TREE> _snap_trees;
 #ifdef TREE_DEBUG
   vector<float> _dbg_hist;
 #endif
   static constexpr float temp_th = 0.001f, rej_ratio = 0.99f;
 };
 
-template<typename ID, typename LEN>
-void local_descent(FLOOR_PLAN<ID, LEN>& fp, int Nblcks, Mode mode,
+template<typename FP>
+void local_descent(FP& fp, int Nblcks, Mode mode,
                    int W, int H, int max_sweeps = 5) {
   // SA 后确定性局部下降：rotate 全扫 + swap 全对扫，直至整遍无改进。
   // Q2：只接受保持可行（bbox<=轮廓）且 HPWL 严格下降；Q1：面积优先、
@@ -331,7 +332,7 @@ void local_descent(FLOOR_PLAN<ID, LEN>& fp, int Nblcks, Mode mode,
     ++sweeps;
     bool improved = false;
     auto base = fp.get_tree();
-    for (ID i = 1; i <= Nblcks; ++i) {
+    for (int i = 1; i <= Nblcks; ++i) {
       auto t = base;
       t.rotate(i);
       fp.restore(t); fp.init();
@@ -339,8 +340,8 @@ void local_descent(FLOOR_PLAN<ID, LEN>& fp, int Nblcks, Mode mode,
       if (accept(c, cur)) { base = t; cur = c; improved = true; }
       else fp.restore(base);
     }
-    for (ID i = 1; i <= Nblcks; ++i) {
-      for (ID j = i + 1; j <= Nblcks; ++j) {
+    for (int i = 1; i <= Nblcks; ++i) {
+      for (int j = i + 1; j <= Nblcks; ++j) {
         auto t = base;
         t.swap_two_nodes(i, j);
         fp.restore(t); fp.init();
@@ -355,7 +356,7 @@ void local_descent(FLOOR_PLAN<ID, LEN>& fp, int Nblcks, Mode mode,
   }
 }
 
-template<typename ID, typename LEN>
+template<template<typename, typename> class FP, typename ID, typename LEN>
 void solve(ifstream& fnets, ifstream& fblcks, ifstream& fpl,
            const string& rpt, int Nnets, int Nblcks, int Ntrmns,
            float alpha, float dead_ratio, Mode mode = Mode::Q2,
@@ -363,8 +364,8 @@ void solve(ifstream& fnets, ifstream& fblcks, ifstream& fpl,
            float t2_div = 0.f,
            const vector<string>* init_order = nullptr,
            bool descent = false) {
-  FLOOR_PLAN<ID, LEN> fp(fnets, fblcks, fpl, rpt, Nnets, Nblcks, Ntrmns,
-                         alpha, dead_ratio, mode == Mode::Q1);
+  FP<ID, LEN> fp(fnets, fblcks, fpl, rpt, Nnets, Nblcks, Ntrmns,
+                 alpha, dead_ratio, mode == Mode::Q1);
   if (init_order && !fp.set_init_order(*init_order)) {
     cerr << "solve: invalid --init-order (count mismatch / unknown / duplicate block)\n";
     exit(1);
@@ -373,8 +374,8 @@ void solve(ifstream& fnets, ifstream& fblcks, ifstream& fpl,
   const float R = fp.R();
   int k = max(2, Nblcks / 11), rnd = 2 * Nblcks + 20;
   float c = max(100 - int(Nblcks), 10);
-  SA<ID, LEN> sa(fp, Nblcks, fp.W(), fp.H(), R, P, alpha_base, beta, alpha,
-                 mode, log, t2_div);
+  SA<FP<ID, LEN>, ID, LEN> sa(fp, Nblcks, fp.W(), fp.H(), R, P, alpha_base,
+                              beta, alpha, mode, log, t2_div);
   if (feas_only) {
     sa.run(k, rnd, c, true);
     fp.init();
@@ -393,7 +394,7 @@ void solve(ifstream& fnets, ifstream& fblcks, ifstream& fpl,
     }
     return;
   }
-  typename FLOOR_PLAN<ID, LEN>::TREE trees[2];
+  typename FP<ID, LEN>::TREE trees[2];
   float costs[2];
   if (mode == Mode::Q1) {
     for (int i = 0; i < 2; ++i) {

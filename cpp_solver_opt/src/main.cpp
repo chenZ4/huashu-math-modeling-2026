@@ -67,12 +67,12 @@ int main(int argc, char** argv) {
   fblcks.seekg(0);
   const vector<string>* init_ptr = has_init_order ? &init_order : nullptr;
   if (Nblcks + Ntrmns + 2 < SHRT_MAX)
-    solve<short, int>(fnets, fblcks, fpl, argv[6], Nnets, Nblcks, Ntrmns,
-                      alpha, dead_ratio, mode, log, feas_only, t2_div,
-                      init_ptr, descent);
+    solve<FLOOR_PLAN, short, int>(fnets, fblcks, fpl, argv[6], Nnets, Nblcks,
+                                  Ntrmns, alpha, dead_ratio, mode, log,
+                                  feas_only, t2_div, init_ptr, descent);
   else
-    solve<int, int>(fnets, fblcks, fpl, argv[6], Nnets, Nblcks, Ntrmns,
-                    alpha, dead_ratio, mode, log, feas_only, t2_div,
-                    init_ptr, descent);
+    solve<FLOOR_PLAN, int, int>(fnets, fblcks, fpl, argv[6], Nnets, Nblcks,
+                                Ntrmns, alpha, dead_ratio, mode, log,
+                                feas_only, t2_div, init_ptr, descent);
   return 0;
 }
