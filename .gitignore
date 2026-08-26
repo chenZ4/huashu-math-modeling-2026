@@ -21,6 +21,6 @@ q3/output/*/bisect_work/
 /author.pdf
 /author_ieee.pdf
 
-# opt 二进制与调试符号
-cpp_solver_opt/bin/
+# 消毒测试二进制与调试符号（main/test_main 按仓库惯例随源码同步入库）
+cpp_solver_opt/bin/test_main_san*
 *.dSYM
