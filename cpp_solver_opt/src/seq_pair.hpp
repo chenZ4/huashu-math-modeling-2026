@@ -76,8 +76,9 @@ public:
     for (ID i = 1; i <= _Nblcks; ++i)
       if (ids[i - 1] != i) return false;
     TREE t(_Nblcks);
-    t.P = ids;
-    t.Q = ids;
+    // 保留 P/Q[0] 哨兵位（值 0），只覆写 [1..N]
+    for (ID k = 0; k < _Nblcks; ++k) t.P[k + 1] = ids[k];
+    t.Q = t.P;
     _tree = t;
     return true;
   }

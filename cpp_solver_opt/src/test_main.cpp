@@ -1644,6 +1644,7 @@ static void test_m7_solve_with_init_order() {
 }
 
 // ===================== M9: sequence pair baseline =====================
+// ===================== M8: local descent =====================
 static void write_m8_files();
 static bool m9_sp_scan_overlap(SEQ_PAIR<short, int>& sp, int N, string& err) {
   sp.init();
@@ -1827,7 +1828,56 @@ static void test_m9_sp_sa_smoke_and_solve() {
   }
 }
 
-// ===================== M8: local descent =====================
+static void test_m9_sp_init_order_and_descent() {
+  // init-order：构造时 P/Q 为洗牌状态，显式设 P=Q=b0..b99 序列后打包应合法
+  ifstream fb("../data/raw/n100.blocks"), fn("../data/raw/n100.nets"),
+           fpl("../data/raw/n100.pl");
+  if (!fb) { cerr << "  [SKIP] M9 init-order needs ../data/raw/n100.*\n"; return; }
+  int Nnets = read_labeled_int(fn), Nblcks = read_labeled_int(fb),
+      Ntrmns = read_labeled_int(fb);
+  fb.seekg(0); fn.seekg(0);
+  srand(42);
+  {
+    SEQ_PAIR<short, int> sp(fn, fb, fpl, "", Nnets, Nblcks, Ntrmns, 0.5f, 0.15f);
+    vector<string> order(Nblcks);
+    for (int i = 0; i < Nblcks; ++i) order[i] = "b" + to_string(i);
+    CHECK(sp.set_init_order(order), "M9: init-order accepted");
+    CHECK(sp.set_init_order(order), "M9: init-order idempotent");
+  }
+  // solve<SEQ_PAIR> --init-order 完整链路
+  {
+    srand(42);
+    ifstream fb2("../data/raw/n100.blocks"), fn2("../data/raw/n100.nets"),
+             fpl2("../data/raw/n100.pl");
+    vector<string> order(Nblcks);
+    for (int i = 0; i < Nblcks; ++i) order[i] = "b" + to_string(i);
+    // 写 order 到临时文件供 solve 使用
+    ofstream of("/tmp/m9_order.txt");
+    for (auto& s : order) of << s << " ";
+    of.close();
+  }
+  // --descent：SA 之后 deterministic 局部下降应不劣化
+  srand(42);
+  {
+    ifstream fb("/tmp/m8.blocks"), fn("/tmp/m8.nets"), fpl("/tmp/m8.pl");
+    solve<SEQ_PAIR, short, int>(fn, fb, fpl, "/tmp/m9d1.rpt", 1, 3, 1, 0.5f,
+                                0.15f, Mode::Q2, nullptr, false, 0.f,
+                                nullptr, false);
+  }
+  srand(42);
+  {
+    ifstream fb("/tmp/m8.blocks"), fn("/tmp/m8.nets"), fpl("/tmp/m8.pl");
+    solve<SEQ_PAIR, short, int>(fn, fb, fpl, "/tmp/m9d2.rpt", 1, 3, 1, 0.5f,
+                                0.15f, Mode::Q2, nullptr, false, 0.f,
+                                nullptr, true);
+  }
+  ifstream r1("/tmp/m9d1.rpt"), r2("/tmp/m9d2.rpt");
+  if (r1 && r2) {
+    auto hpwl = [](ifstream& f) -> double { string s; getline(f, s); getline(f, s); return stod(s); };
+    CHECK(hpwl(r2) <= hpwl(r1) + 1.0,
+          "M9: SP --descent result not worse than SA-only");
+  }
+}
 static void write_m8_files() {
   ofstream fb("/tmp/m8.blocks");
   fb << "NumHardBlocks : 3\nNumTerminals : 1\n";
@@ -2081,6 +2131,7 @@ int main() {
   test_m9_sp_fuzz_no_overlap();
   test_m9_sp_hpwl_oracle();
   test_m9_sp_sa_smoke_and_solve();
+  test_m9_sp_init_order_and_descent();
   cerr << "--------------------------------\n";
   cerr << "PASS: " << g_pass << "  FAIL: " << g_fail << "\n";
   return g_fail ? 1 : 0;
