@@ -363,7 +363,7 @@ void solve(ifstream& fnets, ifstream& fblcks, ifstream& fpl,
            ostream* log = nullptr, bool feas_only = false,
            float t2_div = 0.f,
            const vector<string>* init_order = nullptr,
-           bool descent = false) {
+           bool descent = false, bool accept_all = false) {
   FP<ID, LEN> fp(fnets, fblcks, fpl, rpt, Nnets, Nblcks, Ntrmns,
                  alpha, dead_ratio, mode == Mode::Q1);
   if (init_order && !fp.set_init_order(*init_order)) {
@@ -375,7 +375,7 @@ void solve(ifstream& fnets, ifstream& fblcks, ifstream& fpl,
   int k = max(2, Nblcks / 11), rnd = 2 * Nblcks + 20;
   float c = max(100 - int(Nblcks), 10);
   SA<FP<ID, LEN>, ID, LEN> sa(fp, Nblcks, fp.W(), fp.H(), R, P, alpha_base,
-                              beta, alpha, mode, log, t2_div);
+                              beta, alpha, mode, log, t2_div, accept_all);
   if (feas_only) {
     sa.run(k, rnd, c, true);
     fp.init();

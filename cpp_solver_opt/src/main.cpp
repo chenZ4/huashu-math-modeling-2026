@@ -31,6 +31,7 @@ int main(int argc, char** argv) {
   bool has_init_order = false;
   bool descent = false;
   string encoding = "bstar";
+  bool accept_all = false;
   for (int i = 7; i < argc; ++i) {
     if (string(argv[i]) == "--log" && i + 1 < argc) {
       logfile.open(argv[i + 1]);
@@ -46,6 +47,8 @@ int main(int argc, char** argv) {
     } else if (string(argv[i]) == "--t2-div" && i + 1 < argc) {
       t2_div = stof(argv[i + 1]);
       ++i;
+    } else if (string(argv[i]) == "--accept-all") {
+      accept_all = true;
     } else if (string(argv[i]) == "--encoding" && i + 1 < argc) {
       encoding = argv[i + 1];
       if (encoding != "bstar" && encoding != "sp") {
@@ -81,11 +84,13 @@ int main(int argc, char** argv) {
     if (Nblcks + Ntrmns + 2 < SHRT_MAX)
       solve<SEQ_PAIR, short, int>(fnets, fblcks, fpl, argv[6], Nnets, Nblcks,
                                   Ntrmns, alpha, dead_ratio, mode, log,
-                                  feas_only, t2_div, init_ptr, descent);
+                                  feas_only, t2_div, init_ptr, descent,
+                                  accept_all);
     else
       solve<SEQ_PAIR, int, int>(fnets, fblcks, fpl, argv[6], Nnets, Nblcks,
                                 Ntrmns, alpha, dead_ratio, mode, log,
-                                feas_only, t2_div, init_ptr, descent);
+                                feas_only, t2_div, init_ptr, descent,
+                                accept_all);
     return 0;
   }
   if (Nblcks + Ntrmns + 2 < SHRT_MAX)
