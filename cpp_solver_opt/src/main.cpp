@@ -8,12 +8,15 @@
 using namespace std;
 
 #include "sa.hpp"
+#include "seq_pair.hpp"
 
 int main(int argc, char** argv) {
   ios_base::sync_with_stdio(false);
   if (argc < 7) {
     cerr << "usage: main <mode:q1|q2> <alpha> <blocks> <nets> <pl> <rpt> "
-            "[dead_ratio] [--log <file>] [--feas-only] [--seed <n>]\n";
+            "[dead_ratio] [--log <file>] [--feas-only] [--seed <n>] "
+            "[--t2-div <n>] [--init-order <file>] [--descent] "
+            "[--encoding bstar|sp]\n";
     return 1;
   }
   Mode mode = (string(argv[1]) == "q1") ? Mode::Q1 : Mode::Q2;
@@ -27,6 +30,7 @@ int main(int argc, char** argv) {
   vector<string> init_order;
   bool has_init_order = false;
   bool descent = false;
+  string encoding = "bstar";
   for (int i = 7; i < argc; ++i) {
     if (string(argv[i]) == "--log" && i + 1 < argc) {
       logfile.open(argv[i + 1]);
@@ -41,6 +45,13 @@ int main(int argc, char** argv) {
       ++i;
     } else if (string(argv[i]) == "--t2-div" && i + 1 < argc) {
       t2_div = stof(argv[i + 1]);
+      ++i;
+    } else if (string(argv[i]) == "--encoding" && i + 1 < argc) {
+      encoding = argv[i + 1];
+      if (encoding != "bstar" && encoding != "sp") {
+        cerr << "unknown --encoding: " << encoding << '\n';
+        return 1;
+      }
       ++i;
     } else if (string(argv[i]) == "--init-order" && i + 1 < argc) {
       ifstream ofile(argv[i + 1]);
@@ -66,6 +77,17 @@ int main(int argc, char** argv) {
   fnets.seekg(0);
   fblcks.seekg(0);
   const vector<string>* init_ptr = has_init_order ? &init_order : nullptr;
+  if (encoding == "sp") {
+    if (Nblcks + Ntrmns + 2 < SHRT_MAX)
+      solve<SEQ_PAIR, short, int>(fnets, fblcks, fpl, argv[6], Nnets, Nblcks,
+                                  Ntrmns, alpha, dead_ratio, mode, log,
+                                  feas_only, t2_div, init_ptr, descent);
+    else
+      solve<SEQ_PAIR, int, int>(fnets, fblcks, fpl, argv[6], Nnets, Nblcks,
+                                Ntrmns, alpha, dead_ratio, mode, log,
+                                feas_only, t2_div, init_ptr, descent);
+    return 0;
+  }
   if (Nblcks + Ntrmns + 2 < SHRT_MAX)
     solve<FLOOR_PLAN, short, int>(fnets, fblcks, fpl, argv[6], Nnets, Nblcks,
                                   Ntrmns, alpha, dead_ratio, mode, log,

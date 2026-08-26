@@ -2,7 +2,7 @@ CXX = g++
 CXXFLAGS = -std=c++17 -O3 -Wall -Wextra
 BUILD = bin
 SRC = src
-HDRS = $(SRC)/floor_plan.hpp $(SRC)/sa.hpp
+HDRS = $(SRC)/floor_plan.hpp $(SRC)/sa.hpp $(SRC)/seq_pair.hpp
 
 all: $(BUILD)/main
 
