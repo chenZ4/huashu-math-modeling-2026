@@ -53,6 +53,8 @@ def build_cmd(method, chip, seed, rpt):
         return base + ["--encoding", "sp"]
     if method == "bstar_mem":
         return base
+    if method == "otree_sa":
+        return base + ["--encoding", "otree"]
     raise ValueError(method)
 
 
