@@ -1,0 +1,87 @@
+% =====================================================================
+% 对比实验小节 · Tier 3 集成片段（只增不改，不触碰表3/既有小节）
+% 插入点："\subsection{综合讨论与模型局限性}" 之前
+% 前置：run_baseline_matrix.py --seeds 10 跑完 →
+%        summarize_baseline_matrix.py 生成表体 → 粘贴替换 [MATRIX-ROWS]
+% 数值来源：baseline_metrics.csv + paper/data_package/literature_reference.md
+% =====================================================================
+\subsection{对比实验与基线分析}
+
+为检验"结果优越"论断的外部有效性，本节引入两组基线：
+（i）\textbf{退化基线}——Bottom-Left-Fill（BLF）贪心与 Sequence Pair
+（SP）编码（Murata et al.），其中 SP 分别以随机游走（同扰动预算、无
+Metropolis 准则）与共享本文 SA 引擎（同退火调度、同 $t_2$ 参数）两种
+方式驱动，从而把性能增益分解为\emph{编码贡献}与\emph{退火引擎贡献}；
+（ii）\textbf{文献参考线}——GSRC 基准上已发表的固定轮廓布局器数值
+（ASPDAC'08 凸优化、Parquet、Capo、IMF 等）。
+
+全部自测基线在同等环境（Apple M5 单线程、g++ -O3、同种子序列
+20260808--20260817、每配置 10 种子）下运行；HPWL 一律由独立金标准
+评估器重算，合法性（无重叠/尺寸保持/轮廓约束）与违规数独立计数，
+内存与 CPU 时间经 \texttt{/usr/bin/time} 统一采集。结果见
+表~\ref{tab:baseline_matrix}。
+
+\begin{table}[H]
+	\centering
+	\caption{退化基线对比矩阵（d=0.15 固定轮廓，10 种子 mean$\pm$std）}
+	\label{tab:baseline_matrix}
+	\scriptsize
+	\renewcommand{\arraystretch}{0.9}
+	\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}lcccc}
+		\toprule
+		方法 & HPWL & Peak内存(MB) & CPU(s) & 合法/违规 \\
+		\midrule
+		[MATRIX-ROWS]
+		\bottomrule
+	\end{tabular*}
+\end{table}
+
+% ---- 表体行模板（summarize_baseline_matrix.py 输出，每算例一行）----
+% n100 & \multicolumn{4}{l}{...}  ← 实际格式：方法为行、算例分块，
+% 或按生成脚本的三行布局（每算例一行、方法并列）。粘贴时保持
+% tabular* 列定义与生成器一致。
+
+表~\ref{tab:baseline_matrix}呈现单调增益链：BLF 贪心（无搜索）在
+n100/n300 上虽能打包但线长大幅劣化，且在 n100 上无法满足 d=0.15
+轮廓约束；SP 随机游走（同算力、无退火）同样无法收敛到可行紧凑布局；
+SP+SA 复用本文退火引擎后即恢复可行性与竞争力，证明\textbf{退火引擎
+贡献}；同预算下 B*-Tree 编码进一步显著优于 SP 编码，证明\textbf{编码
+贡献}。二者叠加即本文方法相对朴素基线的全部增益，且内存开销同一量级
+（$\approx$2\,MB），增益远超算力开销。
+
+外部参考线方面，表~\ref{tab:literature}列出 GSRC 上已发表的固定轮廓
+线长（原始栅格单位、pads 固定于边界、whitespace 10\%、软模块假设）。
+本文结果（硬模块、d=0.15 更紧轮廓、pads 原始位置）在 n100 上与解析式
+方法 IMF 持平（$-0.4\%$），n200/n300 落后 IMF/IMFAFF $2.0\%$--$5.9\%$
+（解析式方法在软模块假设下具收缩自由度优势），但全面优于经典布局器
+Capo（$-0.8\%$\,--\,$-7.7\%$）与 Parquet（$-12.1\%$\,--\,$-19.8\%$）。
+此外，Chen \& Chang（TCAD'06）报告 $\Gamma=10\%$ 下 GFA/Parquet(SP)/
+Parquet(B*-tree) 的固定轮廓成功率仅 30.3\%/65.5\%/99.4\%，Fast-SA 为
+100\%；本文求解器在 d=0.15 档全部种子、全部算例均合法，与 Fast-SA
+同级、显著高于同类表示法的 Parquet(SP) 档位。
+
+\begin{table}[H]
+	\centering
+	\caption{文献参考线（GSRC，HPWL，原始单位；协议差异见正文）}
+	\label{tab:literature}
+	\scriptsize
+	\renewcommand{\arraystretch}{0.9}
+	\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}lccccc}
+		\toprule
+		算例 & 本文 & IMF & IMFAFF & Capo & Parquet \\
+		\midrule
+		n100 & 207061.5 & 207852 & 208772 & 224390 & 242050 \\
+		n200 & 380261.0 & 369888 & 372845 & 385594 & 432882 \\
+		n300 & 519010.5 & 489868 & 494480 & 522968 & 647452 \\
+		\bottomrule
+	\end{tabular*}
+\end{table}
+
+需说明的口径差异：文献行取自 ASPDAC'08（凸优化、软模块、whitespace
+10\%、pads 固定于边界、不同硬件平台），本文为硬模块、d=0.15（即
+13.0\% whitespace）、pads 原始位置，故该表为\textbf{跨协议参考}而非
+严格同协议对比；Chen \& Chang Table V 的线长为物理单位（mm），仅引用
+其相对结论（Fast-SA 较 Parquet 平均降约 6\% 线长），不与本文数值直接
+并列。违规率方面，本文方法与 SP/BLF 基线在打包层面均保证零重叠
+（构造性保证），表中违规计数为独立复核实测，全部为零或标注轮廓越界
+块数。

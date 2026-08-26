@@ -100,6 +100,24 @@ python scan/cross_check.py
 - `qX/output/final/`：定稿复现（opt 版 + 最优参数，交叉核对通过）
 - 图：`qX/visualization/figs/final/<chip>/`（11-12 张/芯片）+ `figs/baseline/`（冻结对照）
 
+## 对比实验基线矩阵（run_baseline_matrix.py）
+
+```bash
+conda activate math
+python run_baseline_matrix.py --dry-run            # 预览全部命令
+python run_baseline_matrix.py --quick              # 冒烟：n100×1种子×四方法
+python run_baseline_matrix.py --seeds 10           # 完整矩阵（挂机，约2-5小时）
+python run_baseline_matrix.py --seeds 10 --methods blf sp_sa   # 按需裁剪
+```
+
+- 方法：`blf`（确定性单次）/ `sp_random`（同预算无退火）/ `sp_sa`（同引擎同
+  t2-div）/ `bstar_mem`（B*-Tree 内存补测，质量与 final 口径交叉核对）
+- 测量：Peak RSS 与 CPU time 经 `/usr/bin/time -l` 统一采集；HPWL 用
+  `common/analytic_placer.hpwl_of_rpt` 金标准独立重算；重叠对数与轮廓越界
+  块数独立计数
+- 输出：`q2/output/baseline_matrix/{*.rpt, baseline_metrics.csv}`
+- 文献参考线（外部公认 Baseline）：`paper/data_package/literature_reference.md`
+
 ## 灵敏度分析
 
 ```bash
