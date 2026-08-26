@@ -9,6 +9,7 @@ using namespace std;
 
 #include "sa.hpp"
 #include "seq_pair.hpp"
+#include "otree.hpp"
 
 int main(int argc, char** argv) {
   ios_base::sync_with_stdio(false);
@@ -51,7 +52,7 @@ int main(int argc, char** argv) {
       accept_all = true;
     } else if (string(argv[i]) == "--encoding" && i + 1 < argc) {
       encoding = argv[i + 1];
-      if (encoding != "bstar" && encoding != "sp") {
+      if (encoding != "bstar" && encoding != "sp" && encoding != "otree") {
         cerr << "unknown --encoding: " << encoding << '\n';
         return 1;
       }
@@ -91,6 +92,19 @@ int main(int argc, char** argv) {
                                 Ntrmns, alpha, dead_ratio, mode, log,
                                 feas_only, t2_div, init_ptr, descent,
                                 accept_all);
+    return 0;
+  }
+  if (encoding == "otree") {
+    if (Nblcks + Ntrmns + 2 < SHRT_MAX)
+      solve<OTREE, short, int>(fnets, fblcks, fpl, argv[6], Nnets, Nblcks,
+                                Ntrmns, alpha, dead_ratio, mode, log,
+                                feas_only, t2_div, init_ptr, descent,
+                                accept_all);
+    else
+      solve<OTREE, int, int>(fnets, fblcks, fpl, argv[6], Nnets, Nblcks,
+                              Ntrmns, alpha, dead_ratio, mode, log,
+                              feas_only, t2_div, init_ptr, descent,
+                              accept_all);
     return 0;
   }
   if (Nblcks + Ntrmns + 2 < SHRT_MAX)

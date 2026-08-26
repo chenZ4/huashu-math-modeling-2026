@@ -14,6 +14,7 @@ using namespace std;
 #include "test_oracle.hpp"
 #include "sa.hpp"
 #include "seq_pair.hpp"
+#include "otree.hpp"
 
 typedef FLOOR_PLAN<short, int> FP;
 typedef FP::TREE TR;
@@ -1644,6 +1645,78 @@ static void test_m7_solve_with_init_order() {
 }
 
 // ===================== M9: sequence pair baseline =====================
+// ===================== M10: O-tree baseline =====================
+static bool m10_ot_scan_overlap(OTREE<short, int>& ot, int N, string& err) {
+  ot.init();
+  for (int i = 1; i <= N; ++i)
+    for (int j = i + 1; j <= N; ++j) {
+      const auto& a = ot.blk(i); const auto& b = ot.blk(j);
+      if (a._x < b._x + b._w && b._x < a._x + a._w &&
+          a._y < b._y + b._h && b._y < a._y + a._h) {
+        err = a._name + " vs " + b._name;
+        return false;
+      }
+    }
+  return true;
+}
+
+static void test_m10_otree_fuzz_and_solve() {
+  // Fuzz 测试：n100 上 2000 轮 perturb，验证无重叠+restore幂等
+  ifstream fblcks("../data/raw/n100.blocks");
+  ifstream fnets("../data/raw/n100.nets");
+  ifstream fpl("../data/raw/n100.pl");
+  if (!fblcks) { cerr << "  [SKIP] M10 needs ../data/raw/n100.*\n"; return; }
+  int Nnets = read_labeled_int(fnets), Nblcks = read_labeled_int(fblcks),
+      Ntrmns = read_labeled_int(fblcks);
+  srand(42);
+  fnets.seekg(0);
+  fblcks.seekg(0);
+  OTREE<short, int> ot(fnets, fblcks, fpl, "/dev/null", Nnets, Nblcks, Ntrmns,
+                        0.5f, 0.15f);
+  string err;
+  for (int k = 0; k < 2000; ++k) {
+    ot.perturb();
+    if (!m10_ot_scan_overlap(ot, Nblcks, err)) {
+      ++g_fail;
+      cerr << "  [FAIL] M10 fuzz overlap @" << k << ": " << err << "\n";
+      return;
+    }
+    auto t = ot.get_tree();
+    ot.restore(t); ot.init();
+    int3 c1 = ot.cost();
+    ot.restore(t); ot.init();
+    if (c1 != ot.cost()) {
+      ++g_fail;
+      cerr << "  [FAIL] M10 restore not idempotent @" << k << "\n";
+      return;
+    }
+    ++g_pass;
+  }
+  // SA 冒烟
+  srand(42);
+  {
+    ifstream fb("/tmp/m8.blocks"), fn("/tmp/m8.nets"), fpl2("/tmp/m8.pl");
+    OTREE<short, int> sp(fn, fb, fpl2, "", 1, 3, 1, 0.5f, 0.15f);
+    SA<OTREE<short, int>, short, int> sa(sp, 3, sp.W(), sp.H(), sp.R(),
+                                          0.9f, 0.5f, 0.1f, 0.5f, Mode::Q2);
+    sa.run(1, 26, 97);
+    sa.run2(1, 26, 97);
+    sp.init();
+    CHECK(m10_ot_scan_overlap(sp, 3, err), "M10: OT-SA smoke no overlap");
+  }
+  // solve 端到端
+  srand(42);
+  {
+    ifstream fb("/tmp/m8.blocks"), fn("/tmp/m8.nets"), fpl2("/tmp/m8.pl");
+    solve<OTREE, short, int>(fn, fb, fpl2, "/tmp/m10s.rpt", 1, 3, 1, 0.5f,
+                              0.15f, Mode::Q2, nullptr, false, 35.f);
+    ifstream rpt("/tmp/m10s.rpt");
+    CHECK((bool)rpt, "M10: solve<OTREE> writes rpt");
+    int lines = 0; string s;
+    while (getline(rpt, s)) ++lines;
+    CHECK_EQ(lines, 8, "M10: rpt lines = 5 header + 3 blocks");
+  }
+}
 // ===================== M8: local descent =====================
 static void write_m8_files();
 static bool m9_sp_scan_overlap(SEQ_PAIR<short, int>& sp, int N, string& err) {
@@ -2132,6 +2205,8 @@ int main() {
   test_m9_sp_hpwl_oracle();
   test_m9_sp_sa_smoke_and_solve();
   test_m9_sp_init_order_and_descent();
+  cerr << "== M10: O-tree baseline ==\n";
+  test_m10_otree_fuzz_and_solve();
   cerr << "--------------------------------\n";
   cerr << "PASS: " << g_pass << "  FAIL: " << g_fail << "\n";
   return g_fail ? 1 : 0;
