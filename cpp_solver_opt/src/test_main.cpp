@@ -13,6 +13,7 @@ using namespace std;
 #include "floor_plan.hpp"
 #include "test_oracle.hpp"
 #include "sa.hpp"
+#include "seq_pair.hpp"
 
 typedef FLOOR_PLAN<short, int> FP;
 typedef FP::TREE TR;
@@ -1642,6 +1643,190 @@ static void test_m7_solve_with_init_order() {
   CHECK((bool)rpt2, "M7: feas-only with init-order writes rpt");
 }
 
+// ===================== M9: sequence pair baseline =====================
+static void write_m8_files();
+static bool m9_sp_scan_overlap(SEQ_PAIR<short, int>& sp, int N, string& err) {
+  sp.init();
+  for (int i = 1; i <= N; ++i)
+    for (int j = i + 1; j <= N; ++j) {
+      const auto& a = sp.blk(i);
+      const auto& b = sp.blk(j);
+      if (a._x < b._x + b._w && b._x < a._x + a._w &&
+          a._y < b._y + b._h && b._y < a._y + a._h) {
+        err = a._name + " vs " + b._name;
+        return false;
+      }
+    }
+  return true;
+}
+
+static void test_m9_sp_handcrafted_relations() {
+  ofstream fb("/tmp/m9.blocks");
+  fb << "NumHardBlocks : 3\nNumTerminals : 1\n";
+  fb << "b1 block 4 (0,0) (0,10) (10,10) (10,0)\n";
+  fb << "b2 block 4 (0,0) (0,20) (20,20) (20,0)\n";
+  fb << "b3 block 4 (0,0) (0,30) (30,30) (30,0)\n";
+  fb << "p1 terminal\n";
+  fb.close();
+  ofstream fn("/tmp/m9.nets");
+  fn << "NumNets : 2\nNumPins : 4\nNetDegree : 3\nb1\nb2\np1\nNetDegree : 2\nb1\nb3\n";
+  fn.close();
+  ofstream fpl("/tmp/m9.pl");
+  fpl << "p1 100 100\n";
+  fpl.close();
+  ifstream fb2("/tmp/m9.blocks"), fn2("/tmp/m9.nets"), fpl2("/tmp/m9.pl");
+  SEQ_PAIR<short, int> sp(fn2, fb2, fpl2, "", 2, 3, 1, 0.5f, 0.15f);
+  auto t = sp.get_tree();
+  t.P = {0, 1, 2, 3};
+  t.Q = {0, 1, 2, 3}; // 同序 → 水平链：x 累加，y 全 0
+  sp.restore(t);
+  sp.init();
+  int3 c = sp.cost();
+  CHECK_EQ(get<1>(c), 60, "M9: chain bbox W=10+20+30");
+  CHECK_EQ(get<2>(c), 30, "M9: chain bbox H=max h");
+  CHECK_EQ(sp.blk(2)._x, 10, "M9: b2.x after b1");
+  CHECK_EQ(sp.blk(3)._x, 30, "M9: b3.x after b1+b2");
+  CHECK_EQ(sp.blk(1)._y + sp.blk(2)._y + sp.blk(3)._y, 0, "M9: chain y all zero");
+  t.Q = {0, 3, 2, 1}; // P 正 Q 反 → 垂直堆叠
+  sp.restore(t);
+  sp.init();
+  c = sp.cost();
+  CHECK_EQ(get<1>(c), 30, "M9: stack bbox W=max w");
+  CHECK_EQ(get<2>(c), 60, "M9: stack bbox H=10+20+30");
+  CHECK_EQ(sp.blk(2)._y, 10, "M9: b2.y above b1");
+  CHECK_EQ(sp.blk(3)._y, 30, "M9: b3.y above b1+b2");
+}
+
+static void test_m9_sp_fuzz_no_overlap() {
+  ifstream fblcks("../data/raw/n100.blocks");
+  ifstream fnets("../data/raw/n100.nets");
+  ifstream fpl("../data/raw/n100.pl");
+  if (!fblcks) {
+    cerr << "  [SKIP] M9 fuzz needs ../data/raw/n100.*\n";
+    return;
+  }
+  int Nnets = read_labeled_int(fnets), Nblcks = read_labeled_int(fblcks),
+      Ntrmns = read_labeled_int(fblcks);
+  srand(20260808);
+  fnets.seekg(0);
+  fblcks.seekg(0);
+  SEQ_PAIR<short, int> sp(fnets, fblcks, fpl, "/dev/null", Nnets, Nblcks,
+                          Ntrmns, 0.5f, 0.15f);
+  string err;
+  const int CYCLES = 2000;
+  for (int k = 0; k < CYCLES; ++k) {
+    sp.perturb();
+    if (!m9_sp_scan_overlap(sp, Nblcks, err)) {
+      ++g_fail;
+      cerr << "  [FAIL] M9 fuzz overlap @" << k << ": " << err << "\n";
+      return;
+    }
+    auto t = sp.get_tree();
+    vector<int> seen(Nblcks + 1, 0);
+    for (int i = 1; i <= Nblcks; ++i) { seen[t.P[i]]++; seen[t.Q[i]]++; }
+    bool perm_ok = true;
+    for (int i = 1; i <= Nblcks; ++i) if (seen[i] != 2) perm_ok = false;
+    if (!perm_ok) {
+      ++g_fail;
+      cerr << "  [FAIL] M9 fuzz permutation broken @" << k << "\n";
+      return;
+    }
+    sp.restore(t); sp.init();
+    int3 c1 = sp.cost();
+    sp.restore(t); sp.init();
+    if (c1 != sp.cost()) {
+      ++g_fail;
+      cerr << "  [FAIL] M9 restore not idempotent @" << k << "\n";
+      return;
+    }
+    ++g_pass;
+  }
+}
+
+static void test_m9_sp_hpwl_oracle() {
+  // 独立双循环 HPWL（中心引脚模型 2x+w,2y+h）对照 cost()
+  ifstream fblcks("../data/raw/n100.blocks");
+  ifstream fnets("../data/raw/n100.nets");
+  ifstream fpl("../data/raw/n100.pl");
+  if (!fblcks) return;
+  int Nnets = read_labeled_int(fnets), Nblcks = read_labeled_int(fblcks),
+      Ntrmns = read_labeled_int(fblcks);
+  fnets.seekg(0); fblcks.seekg(0);
+  srand(7);
+  SEQ_PAIR<short, int> sp(fnets, fblcks, fpl, "/dev/null", Nnets, Nblcks,
+                          Ntrmns, 0.5f, 0.15f);
+  map<string, pair<int, int>> term;
+  {
+    ifstream fp2("../data/raw/n100.pl");
+    string nm; int x, y;
+    while (fp2 >> nm >> x >> y) term[nm] = {x, y};
+  }
+  vector<vector<string>> nets;
+  {
+    ifstream f2("../data/raw/n100.nets");
+    string s;
+    while (getline(f2, s)) {
+      if (s.rfind("NetDegree", 0) != 0) continue;
+      int deg = stoi(s.substr(s.find(':') + 1));
+      vector<string> pins;
+      for (int k = 0; k < deg; ++k) { f2 >> s; pins.push_back(s); }
+      nets.push_back(pins);
+    }
+  }
+  for (int round = 0; round < 5; ++round) {
+    sp.perturb(); sp.init();
+    long long ref = 0;
+    for (auto& pins : nets) {
+      long long mnx = 1LL << 60, mny = 1LL << 60, mxx = 0, mxy = 0;
+      for (auto& p : pins) {
+        long long px, py;
+        if (term.count(p)) { px = 2LL * term[p].first; py = 2LL * term[p].second; }
+        else {
+          // 块名→ID：blk(i)._name 线性查（N=100 可接受）
+          for (int i = 1; i <= Nblcks; ++i)
+            if (sp.blk(i)._name == p) {
+              px = 2LL * sp.blk(i)._x + sp.blk(i)._w;
+              py = 2LL * sp.blk(i)._y + sp.blk(i)._h;
+              break;
+            }
+        }
+        mnx = min(mnx, px); mny = min(mny, py);
+        mxx = max(mxx, px); mxy = max(mxy, py);
+      }
+      ref += (mxx - mnx) + (mxy - mny);
+    }
+    int3 c = sp.cost();
+    CHECK_EQ((long long)get<0>(c), ref, "M9: SP cost hpwl matches independent oracle");
+  }
+}
+
+static void test_m9_sp_sa_smoke_and_solve() {
+  write_m8_files();
+  srand(42);
+  {
+    ifstream fb("/tmp/m8.blocks"), fn("/tmp/m8.nets"), fpl("/tmp/m8.pl");
+    SEQ_PAIR<short, int> sp(fn, fb, fpl, "", 1, 3, 1, 0.5f, 0.15f);
+    SA<SEQ_PAIR<short, int>, short, int> sa(sp, 3, sp.W(), sp.H(), sp.R(),
+                                            0.9f, 0.5f, 0.1f, 0.5f, Mode::Q2);
+    sa.run(1, 26, 97);
+    sa.run2(1, 26, 97);
+    sp.init();
+    string err;
+    CHECK(m9_sp_scan_overlap(sp, 3, err), "M9: SP-SA smoke no overlap");
+  }
+  srand(42);
+  {
+    ifstream fb("/tmp/m8.blocks"), fn("/tmp/m8.nets"), fpl("/tmp/m8.pl");
+    solve<SEQ_PAIR, short, int>(fn, fb, fpl, "/tmp/m9s.rpt", 1, 3, 1, 0.5f,
+                                0.15f, Mode::Q2, nullptr, false, 35.f);
+    ifstream rpt("/tmp/m9s.rpt");
+    CHECK((bool)rpt, "M9: solve<SEQ_PAIR> writes rpt");
+    int lines = 0; string s;
+    while (getline(rpt, s)) ++lines;
+    CHECK_EQ(lines, 8, "M9: rpt lines = 5 header + 3 blocks");
+  }
+}
+
 // ===================== M8: local descent =====================
 static void write_m8_files() {
   ofstream fb("/tmp/m8.blocks");
@@ -1891,6 +2076,11 @@ int main() {
   test_m8_descent_idempotent();
   test_m8_descent_deterministic();
   test_m8_feas_only_layout();
+  cerr << "== M9: sequence pair baseline ==\n";
+  test_m9_sp_handcrafted_relations();
+  test_m9_sp_fuzz_no_overlap();
+  test_m9_sp_hpwl_oracle();
+  test_m9_sp_sa_smoke_and_solve();
   cerr << "--------------------------------\n";
   cerr << "PASS: " << g_pass << "  FAIL: " << g_fail << "\n";
   return g_fail ? 1 : 0;
