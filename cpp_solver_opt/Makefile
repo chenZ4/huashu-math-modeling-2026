@@ -4,11 +4,15 @@ BUILD = bin
 SRC = src
 HDRS = $(SRC)/floor_plan.hpp $(SRC)/sa.hpp $(SRC)/seq_pair.hpp
 
-all: $(BUILD)/main
+all: $(BUILD)/main $(BUILD)/blf
 
 $(BUILD)/main: $(SRC)/main.cpp $(HDRS)
 	@mkdir -p $(BUILD)
 	$(CXX) $(CXXFLAGS) -o $@ $(SRC)/main.cpp
+
+$(BUILD)/blf: $(SRC)/blf_main.cpp $(SRC)/floor_plan.hpp
+	@mkdir -p $(BUILD)
+	$(CXX) $(CXXFLAGS) -o $@ $(SRC)/blf_main.cpp
 
 test: $(BUILD)/test_main
 	./$(BUILD)/test_main
